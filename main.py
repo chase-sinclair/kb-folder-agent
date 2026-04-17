@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 import re
 import sys
 from pathlib import Path
@@ -7,6 +8,8 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 load_dotenv()
+
+BACKEND = os.environ.get("BACKEND", "local")
 
 logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
@@ -17,9 +20,15 @@ log = logging.getLogger(__name__)
 
 async def main() -> None:
     from agent.digest import start_digest_scheduler
-    from ingestion.watcher import start_watcher
     from slack.bot import get_app, start_bot
     from storage.db import init_db
+
+    if BACKEND == "onedrive":
+        from ingestion.onedrive_watcher import start_onedrive_watcher as start_watcher
+        log.info("Backend: OneDrive")
+    else:
+        from ingestion.watcher import start_watcher
+        log.info("Backend: local")
 
     await init_db()
     log.info("Database initialised")

@@ -1,10 +1,12 @@
 import logging
+import os
 import re
 
 from dotenv import load_dotenv
 
+load_dotenv()
+
 from ingestion.embedder import embed_query
-from mcp_servers.filesystem_server import list_files, list_folders, get_metadata
 from mcp_servers.vectordb_server import (
     delete_document_chunks,
     get_collection_info,
@@ -12,7 +14,12 @@ from mcp_servers.vectordb_server import (
     query_collection,
 )
 
-load_dotenv()
+BACKEND = os.environ.get("BACKEND", "local")
+
+if BACKEND == "onedrive":
+    from mcp_servers.onedrive_server import list_files, list_folders, get_metadata
+else:
+    from mcp_servers.filesystem_server import list_files, list_folders, get_metadata
 
 log = logging.getLogger(__name__)
 

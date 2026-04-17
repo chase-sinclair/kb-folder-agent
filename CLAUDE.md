@@ -130,4 +130,4 @@ All timestamps: ISO 8601 UTC.
 
 ### V3-1 — OneDrive MCP Server ✔ `mcp_servers/onedrive_server.py`: FastMCP "onedrive" server with `list_folders()`, `list_files()`, `read_file()`, `get_metadata()` tools mirroring filesystem_server.py interface. MSAL device-flow auth with serializable token cache. `_download_to_temp()` streams files for text extraction. Reads `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `ONEDRIVE_FOLDER` from env.
 ### V3-2 — OneDrive Watcher (poll-based sync) ✔ `ingestion/onedrive_watcher.py`: polls OneDrive every `ONEDRIVE_POLL_INTERVAL` seconds via `list_folders()`/`list_files()`; downloads to temp, hashes, skips unchanged files; same Qdrant upsert + quarantine logic as watcher.py. Initial scan: 7 ingested, 1 quarantined (corrupt.pdf).
-### V3-3 — Unified Orchestrator (local + OneDrive sources)
+### V3-3 — Unified Orchestrator (local + OneDrive sources) ✔ `BACKEND=local|onedrive` env var switches filesystem vs OneDrive MCP imports in orchestrator.py and watcher selection in main.py; RAG, chunker, embedder, and Slack bot unchanged.
