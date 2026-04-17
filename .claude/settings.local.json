@@ -3,7 +3,9 @@
     "allow": [
       "Bash(pip install *)",
       "Bash(python -c ' *)",
-      "Bash(python main.py connect ~/Documents/test-kb)"
+      "Bash(python main.py connect ~/Documents/test-kb)",
+      "Bash(timeout 15 python main.py)",
+      "Bash(echo \"EXIT:$?\")"
     ]
   }
 }
