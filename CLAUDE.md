@@ -217,3 +217,16 @@ last_attempted_at, quarantined_at, status
 - `os.environ["OPENAI_API_KEY"]` (not `.get()`) — fails loudly at import if key is missing
 - Retry: up to 3 attempts, 2s sleep between attempts only; no sleep after final failure
 - Errors logged via `logging.getLogger(__name__)` then re-raised — never swallowed
+
+### Phase 5 — File Watcher ✔
+- `ingestion/watcher.py` — 288 lines, watchdog-based file monitor with async ingestion
+- `get_collection_name()` — top-level folder → lowercase+underscores via regex
+- `compute_file_hash()` — sha256 in 64 KB blocks, never loads whole file into memory
+- `ingest_file()` — chunk-level diff: only re-embeds chunks whose hash changed
+- Point IDs are `abs(hash((file_path, chunk_index))) % 2**63` — deterministic, safe upserts
+- `_ensure_collection()` — lazy Qdrant collection creation on first ingest
+- Error routing: `FileNotFoundError/PermissionError` → LOCKED_FILE, `UnsupportedFileTypeError` → UNSUPPORTED_TYPE, >50 MB → TOO_LARGE, all else → CORRUPT_FILE
+- `KBEventHandler` bridges watchdog OS threads → asyncio loop via `run_coroutine_threadsafe`
+- `AsyncQdrantClient` instantiated per-call — no idle persistent connection
+- `start_watcher()` — runs initial full scan via `asyncio.gather`, then starts observer loop
+- `git commit -m "feat(ingestion): add file watcher with chunk-level diff ingestion and quarantine routing"`
