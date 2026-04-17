@@ -255,3 +255,13 @@ last_attempted_at, quarantined_at, status
 - `_point_id()` — sync pure math, consistent with watcher.py
 - `QDRANT_URL` uses `.get()` with default — sensible local default, unlike API keys
 - `git commit -m "feat(mcp): add vectordb MCP server with query, upsert, delete, and collection management"`
+
+### Phase 8 — MCP Orchestrator ✔
+- `agent/orchestrator.py` — 68 lines, single routing layer between RAG/Slack and MCP servers
+- Direct function imports from MCP server modules — full transport is a future enhancement
+- `search()` — embeds query via `embed_query()`, calls `query_collection()`, returns results
+- `collection_exists()` — thin wrapper extracting `exists` bool from `get_collection_info()`
+- `folder_to_collection_name()` — sync pure string transform; spaces+hyphens → underscores, lowercased
+- `list_files` and `get_metadata` imported but not yet wrapped — available for future callers
+- All async functions follow log-and-reraise pattern; orchestrator is routing layer, not error boundary
+- `git commit -m "feat(agent): add MCP orchestrator routing search, collections, and folder queries"`
