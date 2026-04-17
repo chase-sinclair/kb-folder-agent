@@ -34,6 +34,15 @@ def normalize_path(file_path: str) -> str:
     return file_path.replace("\\", "/")
 
 
+def clean_for_slack(text: str) -> str:
+    text = re.sub(r"\*\*(.+?)\*\*", r"*\1*", text)
+    text = re.sub(r"^#{1,6}\s+(.+)$", r"\1", text, flags=re.MULTILINE)
+    text = re.sub(r"^-{3,}$", "", text, flags=re.MULTILINE)
+    text = re.sub(r"^>\s*(.+)$", r"\1", text, flags=re.MULTILINE)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
+
+
 def _parse_command(text: str) -> tuple[str, str, str]:
     """Returns (subcommand, folder_name, query). All fields may be empty strings."""
     text = (text or "").strip()
@@ -111,7 +120,7 @@ async def _handle_ask(folder_name: str, query: str) -> tuple[str, list]:
     blocks = [
         _header(f"💬 {folder_name}"),
         _divider(),
-        _section(result.answer),
+        _section(clean_for_slack(result.answer)),
         _divider(),
         _context(f"📄 Sources: {', '.join(result.sources)}" if result.sources else "📄 No sources"),
     ]
@@ -134,7 +143,7 @@ async def _handle_changes(folder_name: str) -> tuple[str, list]:
     blocks = [
         _header(f"🕐 Recent Changes — {folder_name}"),
         _divider(),
-        _section(result.answer),
+        _section(clean_for_slack(result.answer)),
         _divider(),
         _context(f"📄 Sources: {', '.join(result.sources)}" if result.sources else "📄 No sources"),
     ]
