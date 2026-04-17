@@ -80,9 +80,9 @@ async def query_collection(
         if collection_name not in names:
             return []
 
-        hits = await client.search(
+        response = await client.query_points(
             collection_name=collection_name,
-            query_vector=query_vector,
+            query=query_vector,
             limit=top_k,
             with_payload=True,
         )
@@ -94,7 +94,7 @@ async def query_collection(
                 "chunk_type": hit.payload.get("chunk_type", "text"),
                 "metadata": hit.payload.get("metadata", {}),
             }
-            for hit in hits
+            for hit in response.points
         ]
     finally:
         await client.close()
