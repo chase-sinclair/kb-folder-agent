@@ -16,6 +16,8 @@ load_dotenv()
 
 log = logging.getLogger(__name__)
 
+INFERENCE_CONFIDENCE_THRESHOLD = 0.35
+
 
 async def get_available_collections() -> list[dict]:
     try:
@@ -79,6 +81,42 @@ async def search_all_collections(query: str, top_k_per_collection: int = 3) -> d
         except Exception as exc:
             log.warning("search_all_collections: skipping %r due to error: %s", name, exc)
     return results
+
+
+async def infer_collection(query: str) -> dict:
+    collections = await get_available_collections()
+    if not collections:
+        return {"collection_name": None, "confidence": 0.0, "reason": "No collections available"}
+    if len(collections) == 1:
+        name = collections[0]["name"]
+        log.info("infer_collection: single collection %r, confidence 1.0", name)
+        return {"collection_name": name, "confidence": 1.0, "reason": f"Only collection available: {name}"}
+
+    vector = await embed_query(query)
+    best_name = None
+    best_score = -1.0
+    for col in collections:
+        name = col["name"]
+        try:
+            hits = await query_collection(collection_name=name, query_vector=vector, top_k=1)
+            if hits:
+                score = hits[0].get("score", 0.0)
+                if score > best_score:
+                    best_score = score
+                    best_name = name
+        except Exception as exc:
+            log.warning("infer_collection: skipping %r due to error: %s", name, exc)
+
+    if best_name is None or best_score < INFERENCE_CONFIDENCE_THRESHOLD:
+        log.info("infer_collection: low confidence %.3f for query %r", best_score, query)
+        return {"collection_name": None, "confidence": best_score, "reason": "Low confidence — no strong match found"}
+
+    log.info("infer_collection: routed to %r (score: %.3f)", best_name, best_score)
+    return {
+        "collection_name": best_name,
+        "confidence": best_score,
+        "reason": f"Best match in {best_name} (score: {best_score:.2f})",
+    }
 
 
 def folder_to_collection_name(folder_name: str) -> str:

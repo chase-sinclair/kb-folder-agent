@@ -7,10 +7,12 @@ from dotenv import load_dotenv
 from slack_bolt.async_app import AsyncApp
 
 from agent.orchestrator import (
+    INFERENCE_CONFIDENCE_THRESHOLD,
     collection_exists,
     folder_to_collection_name,
     get_available_collections,
     get_folder_list,
+    infer_collection,
 )
 from agent.rag import answer_query, answer_query_all, summarize_recent_changes
 from ingestion.quarantine import clear_quarantine, get_quarantined_files
@@ -106,24 +108,39 @@ async def _handle_list() -> tuple[str, list]:
 
 
 async def _handle_ask(folder_name: str, query: str) -> tuple[str, list]:
-    if not folder_name:
+    if not query and not folder_name:
         return _error_blocks("Usage: `/kb ask <FolderName> \"<question>\"`")
-    if not query:
-        return _error_blocks(f"Usage: `/kb ask {folder_name} \"<question>\"`")
 
-    if folder_name.lower() == "all":
-        result = await answer_query_all(query)
-        blocks = [_header("💬 All Knowledge Bases"), _divider(), _section(clean_for_slack(result["answer"])), _divider()]
-        for col, sources in result["sources_by_collection"].items():
-            blocks.append(_context(f"📄 {col}: {', '.join(sources)}"))
-        if not result["sources_by_collection"]:
-            blocks.append(_context("📄 No sources found"))
-        return "💬 All Knowledge Bases", blocks
+    # Auto-routing: no folder name supplied
+    inferred_label = None
+    if not folder_name:
+        inferred = await infer_collection(query)
+        if inferred["collection_name"] is None:
+            msg = (
+                "🤔 I couldn't determine which knowledge base to search.\n"
+                "Use `/kb ask <folder> \"question\"` or `/kb list` to see available folders."
+            )
+            return msg, [_section(msg)]
+        collection_name = inferred["collection_name"]
+        folder_name = collection_name
+        inferred_label = f"🔍 Auto-routed to: *{collection_name}* (confidence: {inferred['confidence']:.2f})"
+    else:
+        if not query:
+            return _error_blocks(f"Usage: `/kb ask {folder_name} \"<question>\"`")
 
-    collection_name = folder_to_collection_name(folder_name)
-    if not await collection_exists(collection_name):
-        msg = f"No knowledge base found for `{folder_name}`. Use `/kb list` to see available folders."
-        return _error_blocks(msg)
+        if folder_name.lower() == "all":
+            result = await answer_query_all(query)
+            blocks = [_header("💬 All Knowledge Bases"), _divider(), _section(clean_for_slack(result["answer"])), _divider()]
+            for col, sources in result["sources_by_collection"].items():
+                blocks.append(_context(f"📄 {col}: {', '.join(sources)}"))
+            if not result["sources_by_collection"]:
+                blocks.append(_context("📄 No sources found"))
+            return "💬 All Knowledge Bases", blocks
+
+        collection_name = folder_to_collection_name(folder_name)
+        if not await collection_exists(collection_name):
+            msg = f"No knowledge base found for `{folder_name}`. Use `/kb list` to see available folders."
+            return _error_blocks(msg)
 
     result = await answer_query(collection_name, query)
     blocks = [
@@ -133,6 +150,8 @@ async def _handle_ask(folder_name: str, query: str) -> tuple[str, list]:
         _divider(),
         _context(f"📄 Sources: {', '.join(result.sources)}" if result.sources else "📄 No sources"),
     ]
+    if inferred_label:
+        blocks.append(_context(inferred_label))
     return f"💬 {folder_name}", blocks
 
 
