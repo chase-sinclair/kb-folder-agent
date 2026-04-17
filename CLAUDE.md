@@ -116,7 +116,7 @@ All timestamps: ISO 8601 UTC.
 ### Polish A — Windows Path Fix ✔ `normalize_path()` added to quarantine.py, bot.py, watcher.py — all stored/displayed paths use forward slashes.
 ### Polish B — Wire /kb changes subcommand ✔ `_handle_changes()` added to bot.py; routes via `summarize_recent_changes()`; `changes` added to parse routing and help message.
 ### Polish C — Block Kit Slack Formatting ✔ All handlers return `(fallback_text, blocks)` tuples; `respond(text=fallback, blocks=blocks)` used throughout; header/section/divider/context builders extracted. `clean_for_slack()` strips markdown headers, `**bold**`→`*bold*`, blockquotes, and `---` from Claude answers before display.
-### Polish D — README.md
+### Polish D — README.md ✔ Full README with setup guide, Slack app creation steps, command reference, file type table, Windows notes, and project structure.
 ### V2-1 — Multi-Collection Search
 ### V2-2 — Agent-Inferred Routing
 ### V2-3 — Version Snapshots + Diffs
