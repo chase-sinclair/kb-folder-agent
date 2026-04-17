@@ -207,3 +207,13 @@ last_attempted_at, quarantined_at, status
 - `chunk_markdown()` — single-pass line scan for fenced code blocks, chunk_type='code' for fences
 - `chunk_spreadsheet()` — markdown table per sheet, 50-row groups, includes sheet_name + row_range
 - `chunk_code()` — lookahead regex split on def/class/func/fn, language in metadata
+
+### Phase 4 — Embedder ✔
+- `ingestion/embedder.py` — 62 lines, OpenAI text-embedding-3-small
+- `_embed_texts()` — internal helper owning retry logic; both public functions funnel through it
+- `embed_chunks(chunks)` — batches ChunkResult list into groups of 100, returns list of dicts
+- `embed_query(query)` — thin wrapper over `_embed_texts` for query-time embedding
+- `_client` is module-level `AsyncOpenAI` — one instance reused across all calls, owns connection pool
+- `os.environ["OPENAI_API_KEY"]` (not `.get()`) — fails loudly at import if key is missing
+- Retry: up to 3 attempts, 2s sleep between attempts only; no sleep after final failure
+- Errors logged via `logging.getLogger(__name__)` then re-raised — never swallowed
