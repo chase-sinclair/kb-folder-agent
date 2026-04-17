@@ -265,3 +265,15 @@ last_attempted_at, quarantined_at, status
 - `list_files` and `get_metadata` imported but not yet wrapped — available for future callers
 - All async functions follow log-and-reraise pattern; orchestrator is routing layer, not error boundary
 - `git commit -m "feat(agent): add MCP orchestrator routing search, collections, and folder queries"`
+
+### Phase 9 — RAG Pipeline ✔
+- `agent/rag.py` — 133 lines, Anthropic-powered retrieval-augmented generation
+- `_call_claude()` — single Anthropic boundary; both public functions route through it
+- `_SYSTEM_ANSWER`, `_SYSTEM_CHANGES` — module-level prompt constants for easy tuning
+- `_unique_sources()` — preserves insertion order (relevance rank) via seen-list, not set
+- `_build_context()` — formats each chunk as `[Source: filename]\ncontent`
+- `answer_query()` — retrieves via orchestrator, builds context, calls Claude, returns RagResult
+- `summarize_recent_changes()` — same pipeline with alternate system prompt; `days` param reserved for future metadata filter
+- `RagResult` dataclass — answer, sources, collection_name, result_count
+- `_client` is module-level `AsyncAnthropic`; `os.environ[]` fails loudly on missing key
+- `git commit -m "feat(agent): add RAG pipeline with answer_query and summarize_recent_changes"`
