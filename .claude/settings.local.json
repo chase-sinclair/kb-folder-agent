@@ -6,7 +6,8 @@
       "Bash(python main.py connect ~/Documents/test-kb)",
       "Bash(timeout 15 python main.py)",
       "Bash(echo \"EXIT:$?\")",
-      "Bash(python -c \"from qdrant_client import AsyncQdrantClient; print\\([m for m in dir\\(AsyncQdrantClient\\) if 'query' in m.lower\\(\\) or 'search' in m.lower\\(\\)]\\)\")"
+      "Bash(python -c \"from qdrant_client import AsyncQdrantClient; print\\([m for m in dir\\(AsyncQdrantClient\\) if 'query' in m.lower\\(\\) or 'search' in m.lower\\(\\)]\\)\")",
+      "Bash(python -c \"open\\(r'C:/Users/chase/Documents/test-kb/PastPerformance/corrupt.pdf', 'w'\\).close\\(\\)\")"
     ]
   }
 }

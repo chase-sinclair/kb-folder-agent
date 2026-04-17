@@ -79,6 +79,13 @@ async def _call_claude(system: str, user: str) -> str:
 # ---------------------------------------------------------------------------
 
 async def answer_query(collection_name: str, query: str) -> RagResult:
+    if not query or not query.strip():
+        return RagResult(
+            answer="Please provide a question.",
+            sources=[],
+            collection_name=collection_name,
+            result_count=0,
+        )
     try:
         results = await search(collection_name, query, top_k=TOP_K)
 
