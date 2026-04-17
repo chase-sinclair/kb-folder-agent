@@ -125,3 +125,9 @@ All timestamps: ISO 8601 UTC.
 ### V2-3 — Version Snapshots + Diffs ✔ `file_versions` table (max 5 per file) stores text snapshots on each hash change; `summarize_diff()` in rag.py diffs last 2 versions via `difflib` and asks Claude to summarize; `/kb diff <folder> <file>` renders the summary in Slack.
 ### V2-4 — Richer File Types ✔ Added `chunk_pptx()` (slide chunks via python-pptx), `chunk_email()` (single chunk per .eml, HTML-stripped), `chunk_html()` (BeautifulSoup paragraph chunks); `.pptx`, `.eml`, `.html` added to `SUPPORTED_EXTENSIONS` in watcher.py and filesystem_server.py.
 ### V2-5 — Scheduled Digest ✔ `agent/digest.py`: `build_digest()` fans out `summarize_recent_changes()` across all collections; `send_digest()` posts Block Kit message to `DIGEST_CHANNEL`; `start_digest_scheduler()` sleeps until `DIGEST_TIME` UTC daily. Wired into `main.py` via `asyncio.gather`. Controlled by `DIGEST_ENABLED`, `DIGEST_TIME`, `DIGEST_CHANNEL` env vars.
+
+## V3 Phases
+
+### V3-1 — OneDrive MCP Server ✔ `mcp_servers/onedrive_server.py`: FastMCP "onedrive" server with `list_folders()`, `list_files()`, `read_file()`, `get_metadata()` tools mirroring filesystem_server.py interface. MSAL device-flow auth with serializable token cache. `_download_to_temp()` streams files for text extraction. Reads `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `ONEDRIVE_FOLDER` from env.
+### V3-2 — OneDrive Watcher (poll-based sync)
+### V3-3 — Unified Orchestrator (local + OneDrive sources)

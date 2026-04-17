@@ -12,3 +12,5 @@ aiohttp
 aiosqlite
 python-pptx
 beautifulsoup4
+msal
+msgraph-sdk

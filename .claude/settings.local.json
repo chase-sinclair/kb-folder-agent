@@ -7,7 +7,13 @@
       "Bash(timeout 15 python main.py)",
       "Bash(echo \"EXIT:$?\")",
       "Bash(python -c \"from qdrant_client import AsyncQdrantClient; print\\([m for m in dir\\(AsyncQdrantClient\\) if 'query' in m.lower\\(\\) or 'search' in m.lower\\(\\)]\\)\")",
-      "Bash(python -c \"open\\(r'C:/Users/chase/Documents/test-kb/PastPerformance/corrupt.pdf', 'w'\\).close\\(\\)\")"
+      "Bash(python -c \"open\\(r'C:/Users/chase/Documents/test-kb/PastPerformance/corrupt.pdf', 'w'\\).close\\(\\)\")",
+      "Bash(python -c \"import sys; print\\(sys.executable\\)\")",
+      "Bash(.venv/Scripts/python -c \"import sys; print\\(sys.executable\\)\")",
+      "Bash(.venv/Scripts/pip install *)",
+      "Bash(.venv/Scripts/python -c \"import msal; import msgraph; print\\('imports OK'\\)\")",
+      "Bash(.venv/Scripts/python test_onedrive_auth.py)",
+      "Bash(.venv/Scripts/python -c ' *)"
     ]
   }
 }
