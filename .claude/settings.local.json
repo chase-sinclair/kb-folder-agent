@@ -13,7 +13,9 @@
       "Bash(.venv/Scripts/pip install *)",
       "Bash(.venv/Scripts/python -c \"import msal; import msgraph; print\\('imports OK'\\)\")",
       "Bash(.venv/Scripts/python test_onedrive_auth.py)",
-      "Bash(.venv/Scripts/python -c ' *)"
+      "Bash(.venv/Scripts/python -c ' *)",
+      "Bash(.venv/Scripts/python main.py)",
+      "Bash(cat /tmp/main_out.txt)"
     ]
   }
 }

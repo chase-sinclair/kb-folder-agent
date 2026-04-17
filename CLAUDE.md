@@ -1,33 +1,36 @@
 # kb-folder-agent
 
-AI-powered knowledge base agent: local folder structures → searchable Slack knowledge bases. Each top-level folder maps to a Qdrant collection. Users query via `/kb` and receive RAG-powered answers with citations.
+AI-powered knowledge base agent: local folders or OneDrive → searchable Slack knowledge bases. Each top-level folder maps to a Qdrant collection. Users query via `/kb` and receive RAG-powered answers with citations.
 
 ## Stack
 - **Python 3.13**, **MCP** (Model Context Protocol)
 - **Vector DB**: Qdrant (local Docker, port 6333) — **Embeddings**: OpenAI `text-embedding-3-small`
 - **LLM**: Anthropic Claude (`claude-opus-4-5`) — **Slack**: `slack-bolt` AsyncApp, Socket Mode
-- **File watching**: `watchdog`
+- **File watching**: `watchdog` (local) / poll-based (OneDrive via MSAL + Graph API)
 
 ## Project Structure
 ```
 kb-folder-agent/
-├── main.py                     # Entry point — starts watcher + Slack bot concurrently
+├── main.py                        # Entry point — watcher + Slack bot + digest scheduler
 ├── mcp_servers/
-│   ├── filesystem_server.py    # FastMCP sync tools: list_folders, read_file, get_metadata, list_files
-│   └── vectordb_server.py      # FastMCP async tools: list_collections, query_collection, add_documents, delete_document_chunks, get_collection_info
+│   ├── filesystem_server.py       # FastMCP sync tools: list_folders, read_file, get_metadata, list_files
+│   ├── vectordb_server.py         # FastMCP async tools: list_collections, query_collection, get_collection_info
+│   └── onedrive_server.py         # FastMCP sync tools (same interface): Graph API + MSAL auth
 ├── ingestion/
-│   ├── watcher.py              # Watchdog monitor, ingest_file(), delete_file()
-│   ├── chunker.py              # File-type chunkers → ChunkResult dataclass
-│   ├── embedder.py             # OpenAI embedding calls, batched, with retry
-│   └── quarantine.py           # Quarantine table ops, ErrorType enum
+│   ├── watcher.py                 # Watchdog monitor, ingest_file(), delete_file(), version snapshots
+│   ├── onedrive_watcher.py        # Poll-based OneDrive sync, same ingest/quarantine logic
+│   ├── chunker.py                 # File-type chunkers → ChunkResult dataclass
+│   ├── embedder.py                # OpenAI embedding calls, batched, with retry
+│   └── quarantine.py              # Quarantine table ops, ErrorType enum
 ├── agent/
-│   ├── orchestrator.py         # Routes calls to MCP servers; single entry point for RAG + Slack
-│   └── rag.py                  # answer_query(), summarize_recent_changes() → RagResult
+│   ├── orchestrator.py            # Routes MCP calls; backend-switchable via BACKEND env var
+│   ├── rag.py                     # answer_query(), answer_query_all(), summarize_diff() → RagResult
+│   └── digest.py                  # Daily digest builder + Slack poster + scheduler
 ├── slack/
-│   └── bot.py                  # /kb slash command handler
+│   └── bot.py                     # /kb slash command handler
 └── storage/
-    ├── db.py                   # init_db(), get_db() — aiosqlite async context manager
-    └── metadata.db             # Created at runtime — never commit
+    ├── db.py                      # init_db(), get_db() — aiosqlite async context manager
+    └── metadata.db                # Created at runtime — never commit
 ```
 
 ## Commands
@@ -48,21 +51,29 @@ SLACK_BOT_TOKEN         # xoxb-...
 SLACK_SIGNING_SECRET    # Slack request verification
 SLACK_APP_TOKEN         # xapp-... (Socket Mode; omit for HTTP mode on port 3000)
 QDRANT_URL              # http://localhost:6333
-WATCHED_FOLDER          # Absolute path to root folder (set via connect command)
+WATCHED_FOLDER          # Absolute path to root folder (local backend)
+BACKEND                 # local (default) or onedrive
 DIGEST_ENABLED          # true to enable scheduled digest (default: disabled)
-DIGEST_TIME             # HH:MM UTC time to send daily digest (default: 09:00)
+DIGEST_TIME             # HH:MM UTC for daily digest (default: 09:00)
 DIGEST_CHANNEL          # Slack channel for digest (default: #general)
+AZURE_CLIENT_ID         # App registration client ID (OneDrive backend)
+AZURE_TENANT_ID         # consumers (personal) or tenant ID
+AZURE_CLIENT_SECRET     # App secret (if using confidential client)
+ONEDRIVE_FOLDER         # Root folder name in OneDrive (e.g. test-kb)
+ONEDRIVE_POLL_INTERVAL  # Seconds between OneDrive polls (default: 60)
 ```
 
 **NEVER read or output the contents of `.env`.**
 
 ## Architecture
 
-**Collection routing**: `re.sub(r"[^a-z0-9]+", "_", folder.lower())` — camelCase folders with no separators produce no underscores (`PastPerformance` → `pastperformance`). Slack queries use the plain folder name.
+**Backend selection**: `BACKEND=local` uses filesystem_server.py + watchdog watcher. `BACKEND=onedrive` uses onedrive_server.py + poll-based watcher. RAG, chunker, embedder, and Slack bot are backend-agnostic.
 
-**Ingestion pipeline**: Watcher detects changes → sha256 hash compared at chunk level → only changed chunks re-embedded → upserted to Qdrant with deterministic point IDs `abs(hash((file_path, chunk_index))) % 2**63` → `metadata.db` updated.
+**Collection routing**: `re.sub(r"[^a-z0-9]+", "_", folder.lower())` — camelCase folders with no separators produce no underscores (`PastPerformance` → `pastperformance`).
 
-**Quarantine**: `LOCKED_FILE` retries 3× with backoff `[30, 120, 600]s`. `CORRUPT_FILE`, `TOO_LARGE`, `UNSUPPORTED_TYPE` quarantine immediately. Quarantined files skipped until manually cleared.
+**Ingestion pipeline**: Watcher detects changes → sha256 hash compared → changed chunks re-embedded → upserted to Qdrant with deterministic point IDs `abs(hash((file_path, chunk_index))) % 2**63` → `metadata.db` updated → version snapshot stored.
+
+**Quarantine**: `LOCKED_FILE` retries 3× with backoff `[30, 120, 600]s`. `CORRUPT_FILE`, `TOO_LARGE`, `UNSUPPORTED_TYPE` quarantine immediately.
 
 ## Chunking Strategy
 
@@ -73,12 +84,17 @@ DIGEST_CHANNEL          # Slack channel for digest (default: #general)
 | `.md`, `.txt` | Paragraph split; fenced code blocks as `chunk_type="code"` |
 | `.xlsx`, `.csv` | Markdown table per sheet, 50-row groups |
 | `.py .js .ts .go .rs` | Split on `def`/`class`/`func`/`fn` boundaries |
+| `.pptx` | One chunk per slide; `chunk_type="slide"` |
+| `.eml` | Single chunk; HTML-stripped; headers in metadata; `chunk_type="email"` |
+| `.html` | BeautifulSoup paragraph chunks; `chunk_type="html"` |
 
 ## Metadata Schema (SQLite)
 
 **chunks** (PK: `file_path, chunk_index`): `file_path, file_hash, chunk_index, chunk_hash, chunk_type, last_ingested_at, source_folder, collection_name`
 
 **quarantine** (PK: `file_path`): `file_path, error_type, error_message, retry_count, last_attempted_at, quarantined_at, status`
+
+**file_versions** (PK: `file_path, version_index`): `file_path, version_index, content_snapshot, file_hash, captured_at` — max 5 versions per file
 
 All timestamps: ISO 8601 UTC.
 
@@ -88,6 +104,10 @@ All timestamps: ISO 8601 UTC.
 |---------|-------------|
 | `/kb list` | All collections with chunk counts |
 | `/kb ask <folder> "<question>"` | RAG query against a collection |
+| `/kb ask all "<question>"` | Fan-out query across all collections |
+| `/kb ask "<question>"` | Auto-routes to best-matching collection |
+| `/kb changes <folder>` | Summarize recent changes in a collection |
+| `/kb diff <folder> <filename>` | AI summary of last 2 versions of a file |
 | `/kb status` | Watcher status + quarantined files |
 | `/kb clear-quarantine <folder> <filename>` | Remove file from quarantine |
 
@@ -101,34 +121,23 @@ All timestamps: ISO 8601 UTC.
 
 ## Completed Phases
 
-**Phase 1 — SQLite Schema** ✔ `storage/db.py`: `init_db()` creates both tables; `get_db()` yields `aiosqlite.Row`-factory connection.
-**Phase 2 — Quarantine System** ✔ `ingestion/quarantine.py`: `ErrorType(str, Enum)`; `should_retry()` sync; all DB ops async.
-**Phase 3 — Chunker** ✔ `ingestion/chunker.py`: `chunk_file()` async router; sub-chunkers sync; lazy imports for heavy libs. Token estimate: `len(text.split()) / 0.75`.
-**Phase 4 — Embedder** ✔ `ingestion/embedder.py`: `embed_chunks()` (batches 100), `embed_query()`. Single `_embed_texts()` owns 3-attempt retry with 2s sleep.
-**Phase 5 — File Watcher** ✔ `ingestion/watcher.py`: `KBEventHandler` bridges watchdog threads → asyncio via `run_coroutine_threadsafe`. Initial scan via `asyncio.gather`.
-**Phase 6 — Filesystem MCP Server** ✔ `mcp_servers/filesystem_server.py`: Four sync `@mcp.tool()` functions. `get_metadata()` never raises.
-**Phase 7 — VectorDB MCP Server** ✔ `mcp_servers/vectordb_server.py`: All async, `try/finally client.close()`. Uses `points_count` and `query_points()` — qdrant-client 1.13+/1.17+ API.
-**Phase 8 — MCP Orchestrator** ✔ `agent/orchestrator.py`: Direct function imports (no transport). Filesystem tools are sync — do not `await` them. `folder_to_collection_name()` is sync.
-**Phase 9 — RAG Pipeline** ✔ `agent/rag.py`: `answer_query()` guards empty query before embedding. `_unique_sources()` preserves relevance order.
-**Phase 10 — Slack Bot** ✔ `slack/bot.py`: Uses `respond()` not `say()` — slash commands must use response URL. `WATCHED_FOLDER` imported lazily in `_handle_clear_quarantine`.
-**Phase 11 — Main Entry Point** ✔ `main.py`: Heavy imports deferred inside `main()`. `handle_connect()` uses lambda in `re.sub` for Windows backslash paths.
-**Phase 12 — End-to-End Validation** ✔ All 5 integration tests passed: live watcher, quarantine, re-ingestion diff, RAG quality, edge cases.
+**Phase 1–12** ✔ Core build: SQLite schema, quarantine, chunker, embedder, file watcher, filesystem MCP, vectorDB MCP, orchestrator, RAG pipeline, Slack bot, main entry point, end-to-end validation.
 
 ## V2 Phases
 
-### Polish A — Windows Path Fix ✔ `normalize_path()` added to quarantine.py, bot.py, watcher.py — all stored/displayed paths use forward slashes.
-### Polish B — Wire /kb changes subcommand ✔ `_handle_changes()` added to bot.py; routes via `summarize_recent_changes()`; `changes` added to parse routing and help message.
-### Polish C — Block Kit Slack Formatting ✔ All handlers return `(fallback_text, blocks)` tuples; `respond(text=fallback, blocks=blocks)` used throughout; header/section/divider/context builders extracted. `clean_for_slack()` strips markdown headers, `**bold**`→`*bold*`, blockquotes, and `---` from Claude answers before display.
-### Polish D — README.md ✔ Full README with setup guide, Slack app creation steps, command reference, file type table, Windows notes, and project structure.
-### V2-1 — Multi-Collection Search (/kb ask all) ✔ `search_all_collections()` in orchestrator.py embeds query once, fans out to all collections. `answer_query_all()` in rag.py builds grouped context with `[Collection: name]` headers. `/kb ask all "question"` routes through `_handle_ask()` special-case in bot.py.
-### V2-2 — Agent-Inferred Routing (no folder name required) ✔ `infer_collection()` in orchestrator.py embeds query, scores top-1 hit per collection, picks highest; single-collection shortcut returns confidence 1.0. `INFERENCE_CONFIDENCE_THRESHOLD=0.35` gates low-confidence fallback. `/kb ask "question"` auto-routes with a context block showing the inferred folder and score.
-### V2-3 — Version Snapshots + Diffs ✔ `file_versions` table (max 5 per file) stores text snapshots on each hash change; `summarize_diff()` in rag.py diffs last 2 versions via `difflib` and asks Claude to summarize; `/kb diff <folder> <file>` renders the summary in Slack.
-### V2-4 — Richer File Types ✔ Added `chunk_pptx()` (slide chunks via python-pptx), `chunk_email()` (single chunk per .eml, HTML-stripped), `chunk_html()` (BeautifulSoup paragraph chunks); `.pptx`, `.eml`, `.html` added to `SUPPORTED_EXTENSIONS` in watcher.py and filesystem_server.py.
-### V2-5 — Scheduled Digest ✔ `agent/digest.py`: `build_digest()` fans out `summarize_recent_changes()` across all collections; `send_digest()` posts Block Kit message to `DIGEST_CHANNEL`; `start_digest_scheduler()` sleeps until `DIGEST_TIME` UTC daily. Wired into `main.py` via `asyncio.gather`. Controlled by `DIGEST_ENABLED`, `DIGEST_TIME`, `DIGEST_CHANNEL` env vars.
+**Polish A** ✔ Windows path normalization — forward slashes throughout.
+**Polish B** ✔ `/kb changes` subcommand wired to `summarize_recent_changes()`.
+**Polish C** ✔ Block Kit formatting for all Slack responses; `clean_for_slack()` strips markdown.
+**Polish D** ✔ README.md with full setup guide and command reference.
+**V2-1** ✔ Multi-collection search — `search_all_collections()` + `/kb ask all`.
+**V2-2** ✔ Agent-inferred routing — `infer_collection()` scores top-1 per collection; `INFERENCE_CONFIDENCE_THRESHOLD=0.35`.
+**V2-3** ✔ Version snapshots + diffs — `file_versions` table; `summarize_diff()` via difflib + Claude; `/kb diff`.
+**V2-4** ✔ Richer file types — `.pptx`, `.eml`, `.html` chunkers; python-pptx, beautifulsoup4.
+**V2-5** ✔ Scheduled digest — `agent/digest.py`; daily Slack post via `DIGEST_ENABLED/DIGEST_TIME/DIGEST_CHANNEL`.
 
 ## V3 Phases
 
-### V3-1 — OneDrive MCP Server ✔ `mcp_servers/onedrive_server.py`: FastMCP "onedrive" server with `list_folders()`, `list_files()`, `read_file()`, `get_metadata()` tools mirroring filesystem_server.py interface. MSAL device-flow auth with serializable token cache. `_download_to_temp()` streams files for text extraction. Reads `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `ONEDRIVE_FOLDER` from env.
-### V3-2 — OneDrive Watcher (poll-based sync) ✔ `ingestion/onedrive_watcher.py`: polls OneDrive every `ONEDRIVE_POLL_INTERVAL` seconds via `list_folders()`/`list_files()`; downloads to temp, hashes, skips unchanged files; same Qdrant upsert + quarantine logic as watcher.py. Initial scan: 7 ingested, 1 quarantined (corrupt.pdf).
-### V3-3 — Unified Orchestrator (local + OneDrive sources) ✔ `BACKEND=local|onedrive` env var switches filesystem vs OneDrive MCP imports in orchestrator.py and watcher selection in main.py; RAG, chunker, embedder, and Slack bot unchanged.
-### V3-4 — End-to-End Validation (OneDrive backend) ✔ All RAG paths verified with `BACKEND=onedrive`: single-collection query (navy contract $4.2M, 5 results), multi-collection fan-out, inferred routing (confidence 1.0); main.py startup confirmed `Backend: OneDrive` + `Starting initial OneDrive scan`.
+**V3-1** ✔ OneDrive MCP Server — `mcp_servers/onedrive_server.py` mirrors filesystem_server.py interface; MSAL device-flow auth with serializable token cache; Graph API.
+**V3-2** ✔ OneDrive poll-based watcher — `ingestion/onedrive_watcher.py`; hash-diff skip; same quarantine logic; `ONEDRIVE_POLL_INTERVAL`.
+**V3-3** ✔ Backend selection — `BACKEND=local|onedrive` switches MCP imports in orchestrator.py and watcher in main.py; all other layers unchanged.
+**V3-4** ✔ End-to-end validation — all RAG paths verified with `BACKEND=onedrive`: single-collection, multi-collection, inferred routing.
