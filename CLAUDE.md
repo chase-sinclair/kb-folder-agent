@@ -242,3 +242,16 @@ last_attempted_at, quarantined_at, status
 - `_collection_name()` — same regex logic as watcher.py for consistency
 - `_iso()` — `fromtimestamp(..., tz=timezone.utc)` aware datetime, UTC ISO 8601
 - `git commit -m "feat(mcp): add filesystem MCP server with list_folders, read_file, get_metadata, list_files"`
+
+### Phase 7 — VectorDB MCP Server ✔
+- `mcp_servers/vectordb_server.py` — 203 lines, FastMCP async tools over AsyncQdrantClient
+- All tools are async — every operation awaits a Qdrant network call
+- `try/finally` with `client.close()` on every tool — connection released even on error
+- `list_collections()` — calls `get_collection` per collection for vector_count + status
+- `query_collection()` — returns empty list if collection missing, no raise
+- `add_documents()` — calls `_ensure_collection` then upserts; same `_point_id` logic as watcher.py
+- `delete_document_chunks()` — scroll + delete-by-IDs pattern; works without a payload index
+- `get_collection_info()` — catches bare `Exception` for missing collection; Qdrant raises non-public type
+- `_point_id()` — sync pure math, consistent with watcher.py
+- `QDRANT_URL` uses `.get()` with default — sensible local default, unlike API keys
+- `git commit -m "feat(mcp): add vectordb MCP server with query, upsert, delete, and collection management"`
