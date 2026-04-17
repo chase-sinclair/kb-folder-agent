@@ -18,11 +18,16 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def normalize_path(file_path: str) -> str:
+    return file_path.replace("\\", "/")
+
+
 def should_retry(error_type: ErrorType, retry_count: int) -> bool:
     return error_type == ErrorType.LOCKED_FILE and retry_count < MAX_RETRIES
 
 
 async def quarantine_file(file_path: str, error_type: ErrorType, error_message: str) -> None:
+    file_path = normalize_path(file_path)
     async with get_db() as db:
         await db.execute(
             """
@@ -37,6 +42,7 @@ async def quarantine_file(file_path: str, error_type: ErrorType, error_message: 
 
 
 async def get_retry_count(file_path: str) -> int:
+    file_path = normalize_path(file_path)
     async with get_db() as db:
         async with db.execute(
             "SELECT retry_count FROM quarantine WHERE file_path = ?", (file_path,)
@@ -46,6 +52,7 @@ async def get_retry_count(file_path: str) -> int:
 
 
 async def increment_retry(file_path: str) -> None:
+    file_path = normalize_path(file_path)
     async with get_db() as db:
         await db.execute(
             """
@@ -59,6 +66,7 @@ async def increment_retry(file_path: str) -> None:
 
 
 async def is_quarantined(file_path: str) -> bool:
+    file_path = normalize_path(file_path)
     async with get_db() as db:
         async with db.execute(
             "SELECT 1 FROM quarantine WHERE file_path = ? AND status = 'quarantined'",
@@ -68,6 +76,7 @@ async def is_quarantined(file_path: str) -> bool:
 
 
 async def clear_quarantine(file_path: str) -> None:
+    file_path = normalize_path(file_path)
     async with get_db() as db:
         await db.execute(
             """
@@ -85,7 +94,7 @@ async def get_quarantined_files(folder: str | None = None) -> list[dict]:
         if folder is not None:
             async with db.execute(
                 "SELECT * FROM quarantine WHERE status = 'quarantined' AND file_path LIKE ?",
-                (f"{folder}%",),
+                (f"{normalize_path(folder)}%",),
             ) as cursor:
                 rows = await cursor.fetchall()
         else:
@@ -93,4 +102,7 @@ async def get_quarantined_files(folder: str | None = None) -> list[dict]:
                 "SELECT * FROM quarantine WHERE status = 'quarantined'"
             ) as cursor:
                 rows = await cursor.fetchall()
-        return [dict(row) for row in rows]
+        result = [dict(row) for row in rows]
+        for r in result:
+            r["file_path"] = normalize_path(r["file_path"])
+        return result

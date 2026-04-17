@@ -27,8 +27,12 @@ app = AsyncApp(token=SLACK_BOT_TOKEN, signing_secret=SLACK_SIGNING_SECRET)
 
 
 # ---------------------------------------------------------------------------
-# Parsing helpers
+# Helpers
 # ---------------------------------------------------------------------------
+
+def normalize_path(file_path: str) -> str:
+    return file_path.replace("\\", "/")
+
 
 def _parse_command(text: str) -> tuple[str, str, str]:
     """Returns (subcommand, folder_name, query). All fields may be empty strings."""
@@ -40,7 +44,7 @@ def _parse_command(text: str) -> tuple[str, str, str]:
     subcommand = parts[0].lower()
     rest = parts[1].strip() if len(parts) > 1 else ""
 
-    if subcommand not in {"ask", "clear-quarantine"}:
+    if subcommand not in {"ask", "clear-quarantine", "changes"}:
         return subcommand, "", rest
 
     # Extract folder name (first token) and optional quoted query
@@ -112,7 +116,7 @@ async def _handle_status() -> str:
     if quarantined:
         lines.append(f"• Quarantined files: {len(quarantined)}")
         for q in quarantined:
-            lines.append(f"  - `{q['file_path']}` ({q['error_type']})")
+            lines.append(f"  - `{normalize_path(q['file_path'])}` ({q['error_type']})")
     else:
         lines.append("• Quarantined files: none")
 
@@ -124,10 +128,30 @@ async def _handle_clear_quarantine(folder_name: str, filename: str) -> str:
         return "Usage: `/kb clear-quarantine <FolderName> <filename>`"
 
     from ingestion.watcher import WATCHED_FOLDER
-    file_path = str(WATCHED_FOLDER / folder_name / filename)
+    file_path = normalize_path(str(WATCHED_FOLDER / folder_name / filename))
 
     await clear_quarantine(file_path)
     return f"Cleared quarantine for `{filename}` in `{folder_name}`."
+
+
+async def _handle_changes(folder_name: str) -> str:
+    if not folder_name:
+        return "Usage: `/kb changes <FolderName>`"
+
+    collection_name = folder_to_collection_name(folder_name)
+
+    if not await collection_exists(collection_name):
+        return f"No knowledge base found for `{folder_name}`. Use `/kb list` to see available folders."
+
+    result = await summarize_recent_changes(collection_name)
+
+    if not result.result_count:
+        return f"No recent changes found in `{folder_name}`."
+
+    lines = [f"*Recent Changes — {folder_name}*", "", result.answer]
+    if result.sources:
+        lines.append(f"\n*Sources:* {', '.join(result.sources)}")
+    return "\n".join(lines)
 
 
 def _help_message() -> str:
@@ -136,6 +160,7 @@ def _help_message() -> str:
         "• `/kb list` — Show all knowledge base collections\n"
         "• `/kb ask <FolderName> \"<question>\"` — Ask a question\n"
         "• `/kb status` — Show watcher status and quarantined files\n"
+        "• `/kb changes <FolderName>` — Summarize recent changes in a collection\n"
         "• `/kb clear-quarantine <FolderName> <filename>` — Remove file from quarantine"
     )
 
@@ -160,6 +185,8 @@ async def handle_kb(ack, respond, command):
             response = await _handle_status()
         elif subcommand == "clear-quarantine":
             response = await _handle_clear_quarantine(folder, query)
+        elif subcommand == "changes":
+            response = await _handle_changes(folder)
         else:
             response = _help_message()
     except Exception as exc:
