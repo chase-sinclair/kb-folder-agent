@@ -1,0 +1,12 @@
+anthropic
+openai
+qdrant-client
+watchdog
+pdfplumber
+python-docx
+openpyxl
+slack-bolt
+python-dotenv
+mcp
+aiohttp
+aiosqlite
