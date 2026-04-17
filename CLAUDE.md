@@ -183,3 +183,27 @@ last_attempted_at, quarantined_at, status
 - DB path resolves relative to file, works from any working directory
 - Two tables: `chunks` (primary key: file_path + chunk_index), `quarantine` (primary key: file_path)
 - All timestamps stored as ISO 8601 strings via `datetime.utcnow().isoformat()`
+
+### Phase 2 — Quarantine System ✔
+- `ingestion/quarantine.py` — all quarantine logic isolated here
+- `ErrorType` enum: `LOCKED_FILE`, `CORRUPT_FILE`, `TOO_LARGE`, `UNSUPPORTED_TYPE`
+- `should_retry()` — sync predicate; only `LOCKED_FILE` retries, max 3 times
+- `RETRY_BACKOFF = [30, 120, 600]` — 30s, 2min, 10min escalation
+- `quarantine_file()`, `increment_retry()`, `clear_quarantine()` — state mutations
+- `is_quarantined()`, `get_retry_count()`, `get_quarantined_files()` — queries
+- `ErrorType` extends `str` for direct DB serialization
+
+### Phase 3 — Chunker ✔
+- `ingestion/chunker.py` — 322 lines, file-type-specific chunking
+- `ChunkResult` dataclass — content, chunk_index, chunk_type, metadata
+- `UnsupportedFileTypeError` — raised for unsupported extensions, caught by quarantine system
+- `chunk_file(file_path)` — async router, dispatches to correct chunker by extension
+- Sub-chunkers are sync (file I/O is blocking), chunk_file is async to match caller contract
+- Lazy imports for pdfplumber, docx, openpyxl — startup never fails if a library is missing
+- `estimate_tokens()` — word count / 0.75 ratio
+- `split_into_chunks()` — token-based splitting with overlap, uses same ratio as estimate_tokens
+- `chunk_pdf()` — extracts tables separately as chunk_type='table', includes page_number in metadata
+- `chunk_docx()` — section-aware, includes section_heading in metadata
+- `chunk_markdown()` — single-pass line scan for fenced code blocks, chunk_type='code' for fences
+- `chunk_spreadsheet()` — markdown table per sheet, 50-row groups, includes sheet_name + row_range
+- `chunk_code()` — lookahead regex split on def/class/func/fn, language in metadata
