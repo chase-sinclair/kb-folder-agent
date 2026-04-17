@@ -58,7 +58,7 @@ async def list_collections() -> list[dict]:
             info = await client.get_collection(col.name)
             results.append({
                 "name": col.name,
-                "vector_count": info.vectors_count or 0,
+                "vector_count": info.points_count or 0,
                 "status": str(info.status),
             })
         return results
@@ -183,7 +183,7 @@ async def get_collection_info(collection_name: str) -> dict:
         info = await client.get_collection(collection_name)
         return {
             "name": collection_name,
-            "vector_count": info.vectors_count or 0,
+            "vector_count": info.points_count or 0,
             "status": str(info.status),
             "exists": True,
         }

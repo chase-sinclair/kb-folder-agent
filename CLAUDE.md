@@ -288,3 +288,23 @@ last_attempted_at, quarantined_at, status
 - `summarize_recent_changes` imported but no subcommand wired yet — available for future `/kb changes`
 - All handlers wrapped in try/except; user-facing error message always returned, never unhandled exception
 - `git commit -m "feat(slack): add /kb bot with ask, list, status, and clear-quarantine commands"`
+
+### Phase 11 — Main Entry Point ✔
+- `main.py` — 77 lines, concurrent watcher + bot startup with connect subcommand
+- All heavy imports inside `main()` — deferred so `python main.py connect ...` works without a populated `.env`
+- `asyncio.gather(start_watcher(), start_bot())` — both run forever concurrently
+- `KeyboardInterrupt` caught inside `main()` not at `asyncio.run()` level — consistent log message
+- `handle_connect()` — fully sync; reads/writes `.env` with regex replace preserving other vars
+- `.env` update: regex replace if `WATCHED_FOLDER` exists, append if absent
+- `Path(__file__).parent / ".env"` — resolves relative to script location, not working directory
+- `git commit -m "feat: add main entry point with concurrent watcher+bot startup and connect command"`
+- **Bug fix**: Windows backslash paths in `handle_connect()` broke `re.sub` replacement — fixed with lambda: `lambda _: replacement`
+
+### Phase 12 — End-to-End Ingestion Test ✔
+- Windows backslash paths fixed in main.py handle_connect() via lambda
+- vectordb_server.py: `vectors_count` renamed to `points_count` (qdrant-client 1.17.1 breaking change)
+- Collection naming: no underscores injected for camelCase folder names with no separators
+  e.g. PastPerformance → pastperformance, TechnicalVolume → technicalvolume
+- Slack queries must use the plain folder name: `/kb ask PastPerformance` (maps to pastperformance)
+- Both test files ingested successfully: 2 chunks in pastperformance collection, status green
+- Quarantine system working correctly — CORRUPT_FILE on Qdrant connection failure, cleared and re-ingested cleanly

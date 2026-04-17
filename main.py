@@ -52,9 +52,10 @@ def handle_connect() -> None:
     if env_path.exists():
         existing = env_path.read_text(encoding="utf-8")
         if re.search(r"^WATCHED_FOLDER=", existing, re.MULTILINE):
+            replacement = f"WATCHED_FOLDER={folder}"
             updated = re.sub(
                 r"^WATCHED_FOLDER=.*$",
-                f"WATCHED_FOLDER={folder}",
+                lambda _: replacement,
                 existing,
                 flags=re.MULTILINE,
             )
