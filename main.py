@@ -16,15 +16,17 @@ log = logging.getLogger(__name__)
 
 
 async def main() -> None:
+    from agent.digest import start_digest_scheduler
     from ingestion.watcher import start_watcher
-    from slack.bot import start_bot
+    from slack.bot import get_app, start_bot
     from storage.db import init_db
 
     await init_db()
     log.info("Database initialised")
 
     try:
-        await asyncio.gather(start_watcher(), start_bot())
+        app = await get_app()
+        await asyncio.gather(start_watcher(), start_bot(), start_digest_scheduler(app))
     except KeyboardInterrupt:
         log.info("Shutting down — keyboard interrupt")
     except Exception as exc:

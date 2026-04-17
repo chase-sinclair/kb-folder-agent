@@ -49,6 +49,9 @@ SLACK_SIGNING_SECRET    # Slack request verification
 SLACK_APP_TOKEN         # xapp-... (Socket Mode; omit for HTTP mode on port 3000)
 QDRANT_URL              # http://localhost:6333
 WATCHED_FOLDER          # Absolute path to root folder (set via connect command)
+DIGEST_ENABLED          # true to enable scheduled digest (default: disabled)
+DIGEST_TIME             # HH:MM UTC time to send daily digest (default: 09:00)
+DIGEST_CHANNEL          # Slack channel for digest (default: #general)
 ```
 
 **NEVER read or output the contents of `.env`.**
@@ -121,4 +124,4 @@ All timestamps: ISO 8601 UTC.
 ### V2-2 — Agent-Inferred Routing (no folder name required) ✔ `infer_collection()` in orchestrator.py embeds query, scores top-1 hit per collection, picks highest; single-collection shortcut returns confidence 1.0. `INFERENCE_CONFIDENCE_THRESHOLD=0.35` gates low-confidence fallback. `/kb ask "question"` auto-routes with a context block showing the inferred folder and score.
 ### V2-3 — Version Snapshots + Diffs ✔ `file_versions` table (max 5 per file) stores text snapshots on each hash change; `summarize_diff()` in rag.py diffs last 2 versions via `difflib` and asks Claude to summarize; `/kb diff <folder> <file>` renders the summary in Slack.
 ### V2-4 — Richer File Types ✔ Added `chunk_pptx()` (slide chunks via python-pptx), `chunk_email()` (single chunk per .eml, HTML-stripped), `chunk_html()` (BeautifulSoup paragraph chunks); `.pptx`, `.eml`, `.html` added to `SUPPORTED_EXTENSIONS` in watcher.py and filesystem_server.py.
-### V2-5 — Scheduled Digest
+### V2-5 — Scheduled Digest ✔ `agent/digest.py`: `build_digest()` fans out `summarize_recent_changes()` across all collections; `send_digest()` posts Block Kit message to `DIGEST_CHANNEL`; `start_digest_scheduler()` sleeps until `DIGEST_TIME` UTC daily. Wired into `main.py` via `asyncio.gather`. Controlled by `DIGEST_ENABLED`, `DIGEST_TIME`, `DIGEST_CHANNEL` env vars.

@@ -280,6 +280,10 @@ async def handle_kb(ack, respond, command):
 # Start
 # ---------------------------------------------------------------------------
 
+async def get_app() -> AsyncApp:
+    return app
+
+
 async def start_bot() -> None:
     await init_db()
 
