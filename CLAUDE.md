@@ -230,3 +230,15 @@ last_attempted_at, quarantined_at, status
 - `AsyncQdrantClient` instantiated per-call — no idle persistent connection
 - `start_watcher()` — runs initial full scan via `asyncio.gather`, then starts observer loop
 - `git commit -m "feat(ingestion): add file watcher with chunk-level diff ingestion and quarantine routing"`
+
+### Phase 6 — Filesystem MCP Server ✔
+- `mcp_servers/filesystem_server.py` — 138 lines, FastMCP decorator-based tool registration
+- `FastMCP("filesystem")` — docstrings become tool descriptions exposed to MCP client
+- Tools are sync — all local filesystem reads, FastMCP handles sync tools natively
+- `list_folders()` — iterates top-level dirs, returns name, collection_name, path, file_count
+- `read_file()` — guards on SUPPORTED_EXTENSIONS before extraction; lazy imports for pdfplumber/docx
+- `get_metadata()` — never raises; returns `exists: False` with zeroed fields for missing files
+- `list_files()` — rglob over supported extensions, returns per-file stat metadata
+- `_collection_name()` — same regex logic as watcher.py for consistency
+- `_iso()` — `fromtimestamp(..., tz=timezone.utc)` aware datetime, UTC ISO 8601
+- `git commit -m "feat(mcp): add filesystem MCP server with list_folders, read_file, get_metadata, list_files"`
