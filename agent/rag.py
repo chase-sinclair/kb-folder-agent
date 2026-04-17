@@ -6,7 +6,7 @@ from pathlib import Path
 import anthropic
 from dotenv import load_dotenv
 
-from agent.orchestrator import search
+from agent.orchestrator import search, search_all_collections
 
 load_dotenv()
 
@@ -28,6 +28,13 @@ _SYSTEM_CHANGES = (
     "You are a knowledge base assistant. Using only the provided context, summarize "
     "any recent changes, additions, or modifications you find. Focus on what is new or "
     "different. If no recent changes are evident in the context, say so clearly."
+)
+
+_SYSTEM_ALL = (
+    "You are a knowledge base assistant with access to multiple knowledge bases. "
+    "Answer the user's question using only the provided context. Cite both the "
+    "collection name and source filename for each fact. If the answer is not in "
+    "the context, say so clearly."
 )
 
 
@@ -109,6 +116,32 @@ async def answer_query(collection_name: str, query: str) -> RagResult:
         )
     except Exception as exc:
         log.error("answer_query failed for collection %r: %s", collection_name, exc)
+        raise
+
+
+async def answer_query_all(query: str) -> dict:
+    if not query or not query.strip():
+        return {"answer": "Please provide a question.", "sources_by_collection": {}, "total_result_count": 0}
+    try:
+        results_by_collection = await search_all_collections(query)
+        if not results_by_collection:
+            return {"answer": "No relevant content found across any knowledge base.", "sources_by_collection": {}, "total_result_count": 0}
+
+        context_parts = []
+        for col_name, results in results_by_collection.items():
+            context_parts.append(f"[Collection: {col_name}]")
+            for r in results:
+                filename = Path(r.get("file_path", "unknown")).name
+                context_parts.append(f"[Source: {filename}]\n{r['content']}")
+        context = "\n\n".join(context_parts)
+        user_prompt = f"Context:\n{context}\n\nQuestion: {query}"
+        answer = await _call_claude(_SYSTEM_ALL, user_prompt)
+
+        sources_by_collection = {col: _unique_sources(res) for col, res in results_by_collection.items()}
+        total = sum(len(r) for r in results_by_collection.values())
+        return {"answer": answer, "sources_by_collection": sources_by_collection, "total_result_count": total}
+    except Exception as exc:
+        log.error("answer_query_all failed: %s", exc)
         raise
 
 

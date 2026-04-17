@@ -117,8 +117,8 @@ All timestamps: ISO 8601 UTC.
 ### Polish B — Wire /kb changes subcommand ✔ `_handle_changes()` added to bot.py; routes via `summarize_recent_changes()`; `changes` added to parse routing and help message.
 ### Polish C — Block Kit Slack Formatting ✔ All handlers return `(fallback_text, blocks)` tuples; `respond(text=fallback, blocks=blocks)` used throughout; header/section/divider/context builders extracted. `clean_for_slack()` strips markdown headers, `**bold**`→`*bold*`, blockquotes, and `---` from Claude answers before display.
 ### Polish D — README.md ✔ Full README with setup guide, Slack app creation steps, command reference, file type table, Windows notes, and project structure.
-### V2-1 — Multi-Collection Search
-### V2-2 — Agent-Inferred Routing
+### V2-1 — Multi-Collection Search (/kb ask all) ✔ `search_all_collections()` in orchestrator.py embeds query once, fans out to all collections. `answer_query_all()` in rag.py builds grouped context with `[Collection: name]` headers. `/kb ask all "question"` routes through `_handle_ask()` special-case in bot.py.
+### V2-2 — Agent-Inferred Routing (no folder name required)
 ### V2-3 — Version Snapshots + Diffs
 ### V2-4 — Richer File Types
 ### V2-5 — Scheduled Digest

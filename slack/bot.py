@@ -12,7 +12,7 @@ from agent.orchestrator import (
     get_available_collections,
     get_folder_list,
 )
-from agent.rag import answer_query, summarize_recent_changes
+from agent.rag import answer_query, answer_query_all, summarize_recent_changes
 from ingestion.quarantine import clear_quarantine, get_quarantined_files
 from storage.db import init_db
 
@@ -110,6 +110,15 @@ async def _handle_ask(folder_name: str, query: str) -> tuple[str, list]:
         return _error_blocks("Usage: `/kb ask <FolderName> \"<question>\"`")
     if not query:
         return _error_blocks(f"Usage: `/kb ask {folder_name} \"<question>\"`")
+
+    if folder_name.lower() == "all":
+        result = await answer_query_all(query)
+        blocks = [_header("💬 All Knowledge Bases"), _divider(), _section(clean_for_slack(result["answer"])), _divider()]
+        for col, sources in result["sources_by_collection"].items():
+            blocks.append(_context(f"📄 {col}: {', '.join(sources)}"))
+        if not result["sources_by_collection"]:
+            blocks.append(_context("📄 No sources found"))
+        return "💬 All Knowledge Bases", blocks
 
     collection_name = folder_to_collection_name(folder_name)
     if not await collection_exists(collection_name):

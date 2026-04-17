@@ -63,5 +63,23 @@ async def get_collection_status(collection_name: str) -> dict:
         raise
 
 
+async def search_all_collections(query: str, top_k_per_collection: int = 3) -> dict[str, list[dict]]:
+    collections = await get_available_collections()
+    if not collections:
+        return {}
+    vector = await embed_query(query)
+    results = {}
+    for col in collections:
+        name = col["name"]
+        try:
+            hits = await query_collection(collection_name=name, query_vector=vector, top_k=top_k_per_collection)
+            if hits:
+                results[name] = hits
+                log.info("search_all_collections: %d results from %r", len(hits), name)
+        except Exception as exc:
+            log.warning("search_all_collections: skipping %r due to error: %s", name, exc)
+    return results
+
+
 def folder_to_collection_name(folder_name: str) -> str:
     return re.sub(r"[ \-]+", "_", folder_name).lower()
