@@ -59,6 +59,12 @@ async def chunk_file(file_path: str) -> list[ChunkResult]:
         return chunk_spreadsheet(file_path)
     if ext in {".py", ".js", ".ts", ".go", ".rs"}:
         return chunk_code(file_path)
+    if ext == ".pptx":
+        return chunk_pptx(file_path)
+    if ext == ".eml":
+        return chunk_email(file_path)
+    if ext == ".html":
+        return chunk_html(file_path)
     raise UnsupportedFileTypeError(f"Unsupported file type: {ext!r}")
 
 
@@ -317,5 +323,149 @@ def chunk_code(file_path: str) -> list[ChunkResult]:
             chunk_type="code",
             metadata={"language": language},
         ))
+
+    return results
+
+
+# ---------------------------------------------------------------------------
+# PowerPoint
+# ---------------------------------------------------------------------------
+
+def chunk_pptx(file_path: str) -> list[ChunkResult]:
+    from pptx import Presentation
+
+    prs = Presentation(file_path)
+    results: list[ChunkResult] = []
+    idx = 0
+
+    for slide_num, slide in enumerate(prs.slides, start=1):
+        title = ""
+        body_parts: list[str] = []
+
+        for shape in slide.shapes:
+            if not shape.has_text_frame:
+                continue
+            text = shape.text_frame.text.strip()
+            if not text:
+                continue
+            if shape.shape_type == 13:  # picture placeholder — skip
+                continue
+            if shape.name.lower().startswith("title") or (
+                hasattr(shape, "placeholder_format")
+                and shape.placeholder_format is not None
+                and shape.placeholder_format.idx == 0
+            ):
+                title = text
+            else:
+                body_parts.append(text)
+
+        content = "\n".join(filter(None, [title] + body_parts)).strip()
+        if not content:
+            continue
+
+        results.append(ChunkResult(
+            content=content,
+            chunk_index=idx,
+            chunk_type="slide",
+            metadata={"slide_number": slide_num, "slide_title": title},
+        ))
+        idx += 1
+
+    return results
+
+
+# ---------------------------------------------------------------------------
+# Email (.eml)
+# ---------------------------------------------------------------------------
+
+def chunk_email(file_path: str) -> list[ChunkResult]:
+    import email as _email
+    import html.parser
+
+    class _HTMLStripper(html.parser.HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self._parts: list[str] = []
+        def handle_data(self, data: str) -> None:
+            self._parts.append(data)
+        def get_text(self) -> str:
+            return " ".join(self._parts)
+
+    raw = Path(file_path).read_bytes()
+    msg = _email.message_from_bytes(raw)
+
+    from_addr = msg.get("From", "")
+    to_addr = msg.get("To", "")
+    subject = msg.get("Subject", "")
+    date = msg.get("Date", "")
+
+    body_parts: list[str] = []
+    if msg.is_multipart():
+        for part in msg.walk():
+            ct = part.get_content_type()
+            if ct == "text/plain":
+                body_parts.append(part.get_payload(decode=True).decode(errors="replace"))
+            elif ct == "text/html" and not body_parts:
+                stripper = _HTMLStripper()
+                stripper.feed(part.get_payload(decode=True).decode(errors="replace"))
+                body_parts.append(stripper.get_text())
+    else:
+        payload = msg.get_payload(decode=True)
+        if payload:
+            text = payload.decode(errors="replace")
+            if msg.get_content_type() == "text/html":
+                stripper = _HTMLStripper()
+                stripper.feed(text)
+                text = stripper.get_text()
+            body_parts.append(text)
+
+    body = "\n".join(body_parts).strip()
+    content = f"From: {from_addr}\nTo: {to_addr}\nSubject: {subject}\nDate: {date}\n\n{body}"
+
+    if not content.strip():
+        return []
+
+    return [ChunkResult(
+        content=content,
+        chunk_index=0,
+        chunk_type="email",
+        metadata={"from": from_addr, "to": to_addr, "subject": subject, "date": date},
+    )]
+
+
+# ---------------------------------------------------------------------------
+# HTML
+# ---------------------------------------------------------------------------
+
+def chunk_html(file_path: str) -> list[ChunkResult]:
+    from bs4 import BeautifulSoup
+
+    raw = Path(file_path).read_text(encoding="utf-8", errors="replace")
+    soup = BeautifulSoup(raw, "html.parser")
+
+    for tag in soup(["script", "style"]):
+        tag.decompose()
+
+    title = soup.title.string.strip() if soup.title and soup.title.string else ""
+    text = soup.get_text(separator="\n")
+
+    # Collapse blank lines into paragraph breaks then reuse markdown paragraph chunking
+    paragraphs = [p.strip() for p in re.split(r"\n{2,}", text) if p.strip()]
+    merged_text = "\n\n".join(paragraphs)
+
+    results: list[ChunkResult] = []
+    idx = 0
+    for para_idx, para in enumerate(paragraphs):
+        if not para:
+            continue
+        for chunk_text in split_into_chunks(para, target_tokens=600, overlap_tokens=75):
+            if chunk_text.strip():
+                results.append(ChunkResult(
+                    content=chunk_text,
+                    chunk_index=idx,
+                    chunk_type="html",
+                    metadata={"title": title, "paragraph_index": para_idx},
+                ))
+                idx += 1
 
     return results

@@ -33,6 +33,7 @@ SUPPORTED_EXTENSIONS = {
     ".pdf", ".docx", ".md", ".txt",
     ".xlsx", ".csv",
     ".py", ".js", ".ts", ".go", ".rs",
+    ".pptx", ".eml", ".html",
 }
 
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB

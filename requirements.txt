@@ -10,3 +10,5 @@ python-dotenv
 mcp
 aiohttp
 aiosqlite
+python-pptx
+beautifulsoup4

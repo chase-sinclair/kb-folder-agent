@@ -14,6 +14,7 @@ SUPPORTED_EXTENSIONS = {
     ".pdf", ".docx", ".md", ".txt",
     ".xlsx", ".csv",
     ".py", ".js", ".ts", ".go", ".rs",
+    ".pptx", ".eml", ".html",
 }
 
 mcp = FastMCP("filesystem")
