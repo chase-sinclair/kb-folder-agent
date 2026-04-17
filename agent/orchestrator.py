@@ -27,7 +27,7 @@ async def get_available_collections() -> list[dict]:
 
 async def get_folder_list() -> list[dict]:
     try:
-        return await list_folders()
+        return list_folders()
     except Exception as exc:
         log.error("get_folder_list failed: %s", exc)
         raise

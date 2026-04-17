@@ -145,7 +145,7 @@ def _help_message() -> str:
 # ---------------------------------------------------------------------------
 
 @app.command("/kb")
-async def handle_kb(ack, say, command):
+async def handle_kb(ack, respond, command):
     await ack()
 
     text = command.get("text", "")
@@ -166,7 +166,7 @@ async def handle_kb(ack, say, command):
         log.error("Error handling /kb %s: %s", subcommand, exc)
         response = f"An error occurred: {exc}\nTry `/kb` for usage help."
 
-    await say(response)
+    await respond(response)
 
 
 # ---------------------------------------------------------------------------
