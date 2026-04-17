@@ -277,3 +277,14 @@ last_attempted_at, quarantined_at, status
 - `RagResult` dataclass — answer, sources, collection_name, result_count
 - `_client` is module-level `AsyncAnthropic`; `os.environ[]` fails loudly on missing key
 - `git commit -m "feat(agent): add RAG pipeline with answer_query and summarize_recent_changes"`
+
+### Phase 10 — Slack Bot ✔
+- `slack/bot.py` — 193 lines, AsyncApp slash command handler for `/kb`
+- `_parse_command()` — returns 3-tuple `(subcommand, folder, query)` for all subcommands
+- `clear-quarantine` reuses the `query` slot for `filename` — two positional args, same parse path
+- `WATCHED_FOLDER` imported lazily inside `_handle_clear_quarantine` — avoids circular import at module level
+- `ack()` is always the first `await` — Slack requires acknowledgement within 3 seconds
+- Socket Mode import is lazy — only pulled in when `SLACK_APP_TOKEN` is present
+- `summarize_recent_changes` imported but no subcommand wired yet — available for future `/kb changes`
+- All handlers wrapped in try/except; user-facing error message always returned, never unhandled exception
+- `git commit -m "feat(slack): add /kb bot with ask, list, status, and clear-quarantine commands"`
