@@ -47,122 +47,145 @@ def _parse_command(text: str) -> tuple[str, str, str]:
     if subcommand not in {"ask", "clear-quarantine", "changes"}:
         return subcommand, "", rest
 
-    # Extract folder name (first token) and optional quoted query
     rest_parts = rest.split(None, 1)
     folder = rest_parts[0] if rest_parts else ""
     remainder = rest_parts[1].strip() if len(rest_parts) > 1 else ""
-
-    # Strip surrounding quotes from query
     query = re.sub(r'^["\']|["\']$', "", remainder)
     return subcommand, folder, query
 
 
 # ---------------------------------------------------------------------------
-# Response formatters
+# Block Kit builders
 # ---------------------------------------------------------------------------
 
-async def _handle_list() -> str:
+def _header(text: str) -> dict:
+    return {"type": "header", "text": {"type": "plain_text", "text": text}}
+
+def _section(text: str) -> dict:
+    return {"type": "section", "text": {"type": "mrkdwn", "text": text}}
+
+def _context(text: str) -> dict:
+    return {"type": "context", "elements": [{"type": "mrkdwn", "text": text}]}
+
+def _divider() -> dict:
+    return {"type": "divider"}
+
+def _error_blocks(message: str) -> tuple[str, list]:
+    return message, [_section(message)]
+
+
+# ---------------------------------------------------------------------------
+# Response formatters — return (fallback_text, blocks)
+# ---------------------------------------------------------------------------
+
+async def _handle_list() -> tuple[str, list]:
     folders = await get_folder_list()
     collections = await get_available_collections()
     counts = {c["name"]: c.get("vector_count", 0) for c in collections}
 
     if not folders:
-        return "No knowledge base folders found."
+        return _error_blocks("No knowledge base folders found.")
 
-    lines = ["*Available Knowledge Bases*"]
+    blocks = [_header("📚 Knowledge Bases"), _divider()]
     for f in folders:
         col = f["collection_name"]
         count = counts.get(col, 0)
-        lines.append(f"• {f['name']} → `{col}` ({count} chunks)")
-    return "\n".join(lines)
+        blocks.append(_section(f"*{f['name']}* → `{col}` — {count} chunks"))
+    blocks.append(_divider())
+    blocks.append(_context('Use `/kb ask <folder> "question"` to query'))
+    return "📚 Knowledge Bases", blocks
 
 
-async def _handle_ask(folder_name: str, query: str) -> str:
+async def _handle_ask(folder_name: str, query: str) -> tuple[str, list]:
     if not folder_name:
-        return "Usage: `/kb ask <FolderName> \"<question>\"`"
+        return _error_blocks("Usage: `/kb ask <FolderName> \"<question>\"`")
     if not query:
-        return f"Usage: `/kb ask {folder_name} \"<question>\"`"
+        return _error_blocks(f"Usage: `/kb ask {folder_name} \"<question>\"`")
 
     collection_name = folder_to_collection_name(folder_name)
-
     if not await collection_exists(collection_name):
-        return (
-            f"Collection `{collection_name}` not found. "
-            f"Use `/kb list` to see available knowledge bases."
-        )
+        msg = f"No knowledge base found for `{folder_name}`. Use `/kb list` to see available folders."
+        return _error_blocks(msg)
 
     result = await answer_query(collection_name, query)
+    blocks = [
+        _header(f"💬 {folder_name}"),
+        _divider(),
+        _section(result.answer),
+        _divider(),
+        _context(f"📄 Sources: {', '.join(result.sources)}" if result.sources else "📄 No sources"),
+    ]
+    return f"💬 {folder_name}", blocks
 
-    lines = [result.answer]
-    if result.sources:
-        lines.append(f"\n*Sources:* {', '.join(result.sources)}")
-    return "\n".join(lines)
+
+async def _handle_changes(folder_name: str) -> tuple[str, list]:
+    if not folder_name:
+        return _error_blocks("Usage: `/kb changes <FolderName>`")
+
+    collection_name = folder_to_collection_name(folder_name)
+    if not await collection_exists(collection_name):
+        msg = f"No knowledge base found for `{folder_name}`. Use `/kb list` to see available folders."
+        return _error_blocks(msg)
+
+    result = await summarize_recent_changes(collection_name)
+    if not result.result_count:
+        return _error_blocks(f"No recent changes found in `{folder_name}`.")
+
+    blocks = [
+        _header(f"🕐 Recent Changes — {folder_name}"),
+        _divider(),
+        _section(result.answer),
+        _divider(),
+        _context(f"📄 Sources: {', '.join(result.sources)}" if result.sources else "📄 No sources"),
+    ]
+    return f"🕐 Recent Changes — {folder_name}", blocks
 
 
-async def _handle_status() -> str:
+async def _handle_status() -> tuple[str, list]:
     collections = await get_available_collections()
     quarantined = await get_quarantined_files()
 
-    lines = [
-        "*KB Agent Status*",
-        f"• Watcher: running",
-        f"• Collections: {len(collections)}",
+    blocks = [
+        _header("⚙️ KB Agent Status"),
+        _divider(),
+        _section("*Watcher:* running"),
+        _section(f"*Collections:* {len(collections)} active"),
     ]
+    for c in collections:
+        blocks.append(_context(f"`{c['name']}` — {c.get('vector_count', 0)} chunks"))
 
-    if collections:
-        for c in collections:
-            lines.append(f"  - `{c['name']}` — {c.get('vector_count', 0)} chunks")
-
+    blocks.append(_divider())
+    blocks.append(_section(f"*Quarantined Files:* {len(quarantined)}"))
     if quarantined:
-        lines.append(f"• Quarantined files: {len(quarantined)}")
         for q in quarantined:
-            lines.append(f"  - `{normalize_path(q['file_path'])}` ({q['error_type']})")
+            blocks.append(_context(f"⚠️ `{normalize_path(q['file_path'])}` — {q['error_type']}"))
     else:
-        lines.append("• Quarantined files: none")
+        blocks.append(_context("✅ No quarantined files"))
 
-    return "\n".join(lines)
+    return "⚙️ KB Agent Status", blocks
 
 
-async def _handle_clear_quarantine(folder_name: str, filename: str) -> str:
+async def _handle_clear_quarantine(folder_name: str, filename: str) -> tuple[str, list]:
     if not folder_name or not filename:
-        return "Usage: `/kb clear-quarantine <FolderName> <filename>`"
+        return _error_blocks("Usage: `/kb clear-quarantine <FolderName> <filename>`")
 
     from ingestion.watcher import WATCHED_FOLDER
     file_path = normalize_path(str(WATCHED_FOLDER / folder_name / filename))
-
     await clear_quarantine(file_path)
-    return f"Cleared quarantine for `{filename}` in `{folder_name}`."
+    msg = f"✅ Cleared quarantine for `{filename}` in `{folder_name}`."
+    return msg, [_section(msg)]
 
 
-async def _handle_changes(folder_name: str) -> str:
-    if not folder_name:
-        return "Usage: `/kb changes <FolderName>`"
-
-    collection_name = folder_to_collection_name(folder_name)
-
-    if not await collection_exists(collection_name):
-        return f"No knowledge base found for `{folder_name}`. Use `/kb list` to see available folders."
-
-    result = await summarize_recent_changes(collection_name)
-
-    if not result.result_count:
-        return f"No recent changes found in `{folder_name}`."
-
-    lines = [f"*Recent Changes — {folder_name}*", "", result.answer]
-    if result.sources:
-        lines.append(f"\n*Sources:* {', '.join(result.sources)}")
-    return "\n".join(lines)
-
-
-def _help_message() -> str:
-    return (
+def _help_blocks() -> tuple[str, list]:
+    text = (
         "*KB Agent Commands*\n"
         "• `/kb list` — Show all knowledge base collections\n"
         "• `/kb ask <FolderName> \"<question>\"` — Ask a question\n"
-        "• `/kb status` — Show watcher status and quarantined files\n"
-        "• `/kb changes <FolderName>` — Summarize recent changes in a collection\n"
+        "• `/kb changes <FolderName>` — Summarize recent changes\n"
+        "• `/kb status` — Watcher status and quarantined files\n"
         "• `/kb clear-quarantine <FolderName> <filename>` — Remove file from quarantine"
     )
+    return "KB Agent Commands", [_section(text)]
 
 
 # ---------------------------------------------------------------------------
@@ -178,22 +201,22 @@ async def handle_kb(ack, respond, command):
 
     try:
         if subcommand == "list":
-            response = await _handle_list()
+            fallback, blocks = await _handle_list()
         elif subcommand == "ask":
-            response = await _handle_ask(folder, query)
-        elif subcommand == "status":
-            response = await _handle_status()
-        elif subcommand == "clear-quarantine":
-            response = await _handle_clear_quarantine(folder, query)
+            fallback, blocks = await _handle_ask(folder, query)
         elif subcommand == "changes":
-            response = await _handle_changes(folder)
+            fallback, blocks = await _handle_changes(folder)
+        elif subcommand == "status":
+            fallback, blocks = await _handle_status()
+        elif subcommand == "clear-quarantine":
+            fallback, blocks = await _handle_clear_quarantine(folder, query)
         else:
-            response = _help_message()
+            fallback, blocks = _help_blocks()
     except Exception as exc:
         log.error("Error handling /kb %s: %s", subcommand, exc)
-        response = f"An error occurred: {exc}\nTry `/kb` for usage help."
+        fallback, blocks = _error_blocks(f"An error occurred: {exc}\nTry `/kb` for usage help.")
 
-    await respond(response)
+    await respond(text=fallback, blocks=blocks)
 
 
 # ---------------------------------------------------------------------------
