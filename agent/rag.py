@@ -1,3 +1,4 @@
+import difflib
 import logging
 import os
 from dataclasses import dataclass
@@ -28,6 +29,11 @@ _SYSTEM_CHANGES = (
     "You are a knowledge base assistant. Using only the provided context, summarize "
     "any recent changes, additions, or modifications you find. Focus on what is new or "
     "different. If no recent changes are evident in the context, say so clearly."
+)
+
+_SYSTEM_DIFF = (
+    "You are a document analyst. Summarize the changes between two versions of a document "
+    "in plain English. Focus on what was added, removed, or modified. Be concise and specific."
 )
 
 _SYSTEM_ALL = (
@@ -143,6 +149,49 @@ async def answer_query_all(query: str) -> dict:
     except Exception as exc:
         log.error("answer_query_all failed: %s", exc)
         raise
+
+
+async def summarize_diff(file_path: str) -> dict:
+    from storage.db import get_db
+    async with get_db() as db:
+        async with db.execute(
+            "SELECT version_index, content_snapshot FROM file_versions "
+            "WHERE file_path = ? ORDER BY version_index DESC LIMIT 2",
+            (file_path,),
+        ) as cursor:
+            rows = await cursor.fetchall()
+
+    if len(rows) < 2:
+        return {"answer": "Not enough version history to compare.", "file_path": file_path}
+
+    v_new, v_old = dict(rows[0]), dict(rows[1])
+    diff_lines = list(difflib.unified_diff(
+        v_old["content_snapshot"].splitlines(keepends=True),
+        v_new["content_snapshot"].splitlines(keepends=True),
+        fromfile=f"v{v_old['version_index']}",
+        tofile=f"v{v_new['version_index']}",
+        lineterm="",
+    ))
+
+    if not diff_lines:
+        return {"answer": "No differences found between the two most recent versions.", "file_path": file_path}
+
+    diff_text = "".join(diff_lines)
+    if len(diff_text) > 3000:
+        diff_text = diff_text[:3000] + "\n...[truncated]"
+
+    user_prompt = f"Diff:\n```\n{diff_text}\n```"
+    try:
+        answer = await _call_claude(_SYSTEM_DIFF, user_prompt)
+    except Exception as exc:
+        log.error("summarize_diff failed for %r: %s", file_path, exc)
+        raise
+
+    return {
+        "answer": answer,
+        "file_path": file_path,
+        "versions_compared": [v_old["version_index"], v_new["version_index"]],
+    }
 
 
 async def summarize_recent_changes(collection_name: str, days: int = 3) -> RagResult:

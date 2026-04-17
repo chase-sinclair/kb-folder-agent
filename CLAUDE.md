@@ -119,6 +119,6 @@ All timestamps: ISO 8601 UTC.
 ### Polish D — README.md ✔ Full README with setup guide, Slack app creation steps, command reference, file type table, Windows notes, and project structure.
 ### V2-1 — Multi-Collection Search (/kb ask all) ✔ `search_all_collections()` in orchestrator.py embeds query once, fans out to all collections. `answer_query_all()` in rag.py builds grouped context with `[Collection: name]` headers. `/kb ask all "question"` routes through `_handle_ask()` special-case in bot.py.
 ### V2-2 — Agent-Inferred Routing (no folder name required) ✔ `infer_collection()` in orchestrator.py embeds query, scores top-1 hit per collection, picks highest; single-collection shortcut returns confidence 1.0. `INFERENCE_CONFIDENCE_THRESHOLD=0.35` gates low-confidence fallback. `/kb ask "question"` auto-routes with a context block showing the inferred folder and score.
-### V2-3 — Version Snapshots + Diffs
+### V2-3 — Version Snapshots + Diffs ✔ `file_versions` table (max 5 per file) stores text snapshots on each hash change; `summarize_diff()` in rag.py diffs last 2 versions via `difflib` and asks Claude to summarize; `/kb diff <folder> <file>` renders the summary in Slack.
 ### V2-4 — Richer File Types
 ### V2-5 — Scheduled Digest

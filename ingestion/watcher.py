@@ -67,6 +67,62 @@ async def get_stored_chunks(file_path: str) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
+# Version snapshot helpers
+# ---------------------------------------------------------------------------
+
+async def get_latest_version(file_path: str) -> dict | None:
+    async with get_db() as db:
+        async with db.execute(
+            "SELECT version_index, content_snapshot, file_hash FROM file_versions "
+            "WHERE file_path = ? ORDER BY version_index DESC LIMIT 1",
+            (file_path,),
+        ) as cursor:
+            row = await cursor.fetchone()
+    return dict(row) if row else None
+
+
+async def store_version_snapshot(file_path: str, content: str, file_hash: str) -> None:
+    now = __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat()
+    async with get_db() as db:
+        async with db.execute(
+            "SELECT COALESCE(MAX(version_index), -1) FROM file_versions WHERE file_path = ?",
+            (file_path,),
+        ) as cursor:
+            row = await cursor.fetchone()
+        next_index = row[0] + 1
+        await db.execute(
+            "INSERT INTO file_versions (file_path, version_index, content_snapshot, file_hash, captured_at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (file_path, next_index, content, file_hash, now),
+        )
+        await db.execute(
+            "DELETE FROM file_versions WHERE file_path = ? AND version_index <= ?",
+            (file_path, next_index - 5),
+        )
+        await db.commit()
+    log.debug("Stored version %d snapshot for %s", next_index, file_path)
+
+
+def _extract_text_for_snapshot(file_path: str) -> str | None:
+    path = Path(file_path)
+    suffix = path.suffix.lower()
+    try:
+        if suffix in {".txt", ".md"}:
+            return path.read_text(encoding="utf-8", errors="replace")
+        if suffix == ".pdf":
+            import pdfplumber
+            with pdfplumber.open(file_path) as pdf:
+                return "\n".join(page.extract_text() or "" for page in pdf.pages)
+        if suffix == ".docx":
+            from docx import Document
+            doc = Document(file_path)
+            return "\n".join(p.text for p in doc.paragraphs)
+    except Exception as exc:
+        log.debug("Could not extract text for snapshot from %s: %s", file_path, exc)
+    return None
+
+
+# ---------------------------------------------------------------------------
 # Qdrant helpers
 # ---------------------------------------------------------------------------
 
@@ -129,6 +185,13 @@ async def ingest_file(file_path: str) -> None:
             raise ValueError(f"File exceeds 50 MB: {file_path}")
 
         file_hash = compute_file_hash(file_path)
+
+        latest_version = await get_latest_version(file_path)
+        if latest_version is None or latest_version["file_hash"] != file_hash:
+            snapshot_text = _extract_text_for_snapshot(file_path)
+            if snapshot_text is not None:
+                await store_version_snapshot(file_path, snapshot_text, file_hash)
+
         stored = await get_stored_chunks(file_path)
         stored_by_index = {r["chunk_index"]: r["chunk_hash"] for r in stored}
 
