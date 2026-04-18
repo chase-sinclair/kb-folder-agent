@@ -17,6 +17,7 @@ from ingestion.quarantine import (
     increment_retry,
     is_quarantined,
     normalize_path,
+    purge_stale_quarantine,
     quarantine_file,
     should_retry,
 )
@@ -129,22 +130,19 @@ def _extract_text_for_snapshot(file_path: str) -> str | None:
 
 async def _ensure_collection(client, collection_name: str) -> None:
     from qdrant_client.models import Distance, VectorParams
-    from qdrant_client.http.exceptions import UnexpectedResponse
 
-    existing = await client.get_collections()
-    names = {c.name for c in existing.collections}
-    if collection_name not in names:
-        try:
-            await client.create_collection(
-                collection_name=collection_name,
-                vectors_config=VectorParams(size=1536, distance=Distance.COSINE),
-            )
-            log.info("Created Qdrant collection %r", collection_name)
-        except UnexpectedResponse as exc:
-            if exc.status_code == 409:
-                log.debug("Collection %r already exists (concurrent create), continuing", collection_name)
-            else:
-                raise
+    try:
+        await client.create_collection(
+            collection_name=collection_name,
+            vectors_config=VectorParams(size=1536, distance=Distance.COSINE),
+        )
+        log.info("Created Qdrant collection %r", collection_name)
+    except Exception as exc:
+        msg = str(exc)
+        if "409" in msg or "already exists" in msg.lower():
+            log.debug("Collection %r already exists (concurrent create), continuing", collection_name)
+        else:
+            raise
 
 
 async def _delete_file_from_qdrant(client, collection_name: str, file_path: str) -> None:
@@ -333,6 +331,9 @@ class KBEventHandler(FileSystemEventHandler):
 
 async def start_watcher() -> None:
     await init_db()
+    purged = await purge_stale_quarantine(str(WATCHED_FOLDER))
+    if purged:
+        log.info("Purged %d stale quarantine record(s) outside %s", purged, WATCHED_FOLDER)
     log.info("Starting initial scan of %s", WATCHED_FOLDER)
 
     scan_tasks = []

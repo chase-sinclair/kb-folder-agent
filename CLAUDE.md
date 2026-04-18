@@ -144,7 +144,9 @@ All timestamps: ISO 8601 UTC.
 
 ## Known Fixes
 
-**`_ensure_collection` 409 race** — During initial scan, concurrent coroutines for the same collection both pass the `if name not in names` guard and race to `PUT /collections/{name}`. The second gets a 409 Conflict, which previously propagated as an exception and was caught by the generic handler, quarantining the file as `CORRUPT_FILE`. Fixed in both `ingestion/watcher.py` and `ingestion/onedrive_watcher.py`: catch `UnexpectedResponse(409)` inside `_ensure_collection` and treat it as a no-op; re-raise any other status code.
+**`_ensure_collection` 409 race** — During initial scan, concurrent coroutines for the same collection both pass a check-then-create guard and race to `PUT /collections/{name}`. The second gets a 409 Conflict, quarantining the file as `CORRUPT_FILE`. Fixed in both watchers: dropped the `get_collections()` pre-check entirely; now unconditionally attempts `create_collection` and catches any exception whose string contains `"409"` or `"already exists"` — re-raises all others. This eliminates the TOCTOU window and avoids a fragile `UnexpectedResponse` import path dependency.
+
+**Stale quarantine entries from removed folders** — `/kb status` showed quarantined files from folders no longer under `WATCHED_FOLDER`. Added `purge_stale_quarantine(watched_root)` to `ingestion/quarantine.py`; called from `start_watcher()` after `init_db()`. On every startup, records whose `file_path` doesn't start with the current `WATCHED_FOLDER` are deleted from the quarantine table.
 
 **Transient Qdrant errors misclassified as CORRUPT_FILE** — Qdrant 503/429/500 responses and `aiohttp` connection/timeout errors were caught by the generic `except Exception` handler and quarantined permanently. Added `ErrorType.TRANSIENT_ERROR` to `ingestion/quarantine.py`; added it to `RETRYABLE_ERRORS` so it gets the same 3-retry backoff as `LOCKED_FILE`. Both watchers now detect `UnexpectedResponse` with status 503/429/500 and `aiohttp` connection/timeout errors and route them to `TRANSIENT_ERROR` instead of `CORRUPT_FILE`.
 

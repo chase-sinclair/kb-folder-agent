@@ -61,22 +61,19 @@ def _compute_hash_from_bytes(data: bytes) -> str:
 
 async def _ensure_collection(client, collection_name: str) -> None:
     from qdrant_client.models import Distance, VectorParams
-    from qdrant_client.http.exceptions import UnexpectedResponse
 
-    existing = await client.get_collections()
-    names = {c.name for c in existing.collections}
-    if collection_name not in names:
-        try:
-            await client.create_collection(
-                collection_name=collection_name,
-                vectors_config=VectorParams(size=1536, distance=Distance.COSINE),
-            )
-            log.info("Created Qdrant collection %r", collection_name)
-        except UnexpectedResponse as exc:
-            if exc.status_code == 409:
-                log.debug("Collection %r already exists (concurrent create), continuing", collection_name)
-            else:
-                raise
+    try:
+        await client.create_collection(
+            collection_name=collection_name,
+            vectors_config=VectorParams(size=1536, distance=Distance.COSINE),
+        )
+        log.info("Created Qdrant collection %r", collection_name)
+    except Exception as exc:
+        msg = str(exc)
+        if "409" in msg or "already exists" in msg.lower():
+            log.debug("Collection %r already exists (concurrent create), continuing", collection_name)
+        else:
+            raise
 
 
 # ---------------------------------------------------------------------------

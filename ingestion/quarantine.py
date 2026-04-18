@@ -93,6 +93,20 @@ async def clear_quarantine(file_path: str) -> None:
         await db.commit()
 
 
+async def purge_stale_quarantine(watched_root: str) -> int:
+    """Delete quarantine records whose file_path no longer falls under watched_root."""
+    watched_root = normalize_path(watched_root).rstrip("/") + "/"
+    async with get_db() as db:
+        async with db.execute("SELECT file_path FROM quarantine WHERE status = 'quarantined'") as cursor:
+            rows = await cursor.fetchall()
+        stale = [r["file_path"] for r in rows if not normalize_path(r["file_path"]).startswith(watched_root)]
+        for fp in stale:
+            await db.execute("DELETE FROM quarantine WHERE file_path = ?", (fp,))
+        if stale:
+            await db.commit()
+    return len(stale)
+
+
 async def get_quarantined_files(folder: str | None = None) -> list[dict]:
     async with get_db() as db:
         if folder is not None:
