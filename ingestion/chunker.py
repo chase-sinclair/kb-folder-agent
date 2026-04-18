@@ -47,7 +47,7 @@ def split_into_chunks(text: str, target_tokens: int, overlap_tokens: int) -> lis
 # Router
 # ---------------------------------------------------------------------------
 
-async def chunk_file(file_path: str) -> list[ChunkResult]:
+def chunk_file(file_path: str) -> list[ChunkResult]:
     ext = Path(file_path).suffix.lower()
     if ext == ".pdf":
         return chunk_pdf(file_path)

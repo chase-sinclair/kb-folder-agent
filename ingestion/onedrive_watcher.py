@@ -100,7 +100,8 @@ async def ingest_onedrive_file(file_path: str, folder_name: str) -> None:
 
     tmp_path = None
     try:
-        meta = get_metadata(file_path)
+        from mcp_servers.onedrive_server import _download_to_temp
+        meta = await asyncio.to_thread(get_metadata, file_path)
         if not meta.get("exists"):
             return
 
@@ -108,9 +109,8 @@ async def ingest_onedrive_file(file_path: str, folder_name: str) -> None:
             raise ValueError(f"File exceeds 50 MB: {file_path}")
 
         # Download to temp to compute hash
-        from mcp_servers.onedrive_server import _download_to_temp
-        tmp_path = _download_to_temp(file_path)
-        file_bytes = Path(tmp_path).read_bytes()
+        tmp_path = await asyncio.to_thread(_download_to_temp, file_path)
+        file_bytes = await asyncio.to_thread(Path(tmp_path).read_bytes)
         file_hash = _compute_hash_from_bytes(file_bytes)
 
         stored_hash = await get_stored_file_hash(file_path)
@@ -122,13 +122,17 @@ async def ingest_onedrive_file(file_path: str, folder_name: str) -> None:
 
         # chunk_file needs a real local path with the correct extension
         ext = Path(file_path).suffix.lower()
-        named_tmp = tempfile.NamedTemporaryFile(delete=False, suffix=ext)
-        named_tmp.write(file_bytes)
-        named_tmp.close()
-        Path(tmp_path).unlink(missing_ok=True)
-        tmp_path = named_tmp.name
 
-        chunks = await chunk_file(tmp_path)
+        def _write_named_tmp() -> str:
+            t = tempfile.NamedTemporaryFile(delete=False, suffix=ext)
+            t.write(file_bytes)
+            t.close()
+            return t.name
+
+        Path(tmp_path).unlink(missing_ok=True)
+        tmp_path = await asyncio.to_thread(_write_named_tmp)
+
+        chunks = await asyncio.to_thread(chunk_file, tmp_path)
         Path(tmp_path).unlink(missing_ok=True)
         tmp_path = None
 
@@ -140,24 +144,22 @@ async def ingest_onedrive_file(file_path: str, folder_name: str) -> None:
         # All chunks are "changed" since we compare at file-hash level
         embedded = await embed_chunks(chunks)
 
-        client = AsyncQdrantClient(url=QDRANT_URL)
-        await _ensure_collection(client, collection_name)
-
-        points = [
-            PointStruct(
-                id=abs(hash((file_path, item["chunk_index"]))) % (2**63),
-                vector=item["embedding"],
-                payload={
-                    "content": item["content"],
-                    "metadata": item["metadata"],
-                    "chunk_type": item["chunk_type"],
-                    "file_path": file_path,
-                },
-            )
-            for item in embedded
-        ]
-        await client.upsert(collection_name=collection_name, points=points)
-        await client.close()
+        async with AsyncQdrantClient(url=QDRANT_URL) as client:
+            await _ensure_collection(client, collection_name)
+            points = [
+                PointStruct(
+                    id=abs(hash((file_path, item["chunk_index"]))) % (2**63),
+                    vector=item["embedding"],
+                    payload={
+                        "content": item["content"],
+                        "metadata": item["metadata"],
+                        "chunk_type": item["chunk_type"],
+                        "file_path": file_path,
+                    },
+                )
+                for item in embedded
+            ]
+            await client.upsert(collection_name=collection_name, points=points)
 
         now = datetime.now(timezone.utc).isoformat()
         async with get_db() as db:
@@ -205,11 +207,11 @@ async def ingest_onedrive_file(file_path: str, folder_name: str) -> None:
 async def _scan_all() -> int:
     from mcp_servers.onedrive_server import list_folders, list_files
 
-    folders = list_folders()
+    folders = await asyncio.to_thread(list_folders)
     tasks = []
     for folder in folders:
         folder_name = folder["name"]
-        files = list_files(folder_name)
+        files = await asyncio.to_thread(list_files, folder_name)
         for f in files:
             tasks.append(ingest_onedrive_file(f["file_path"], folder_name))
 

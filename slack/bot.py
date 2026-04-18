@@ -15,7 +15,7 @@ from agent.orchestrator import (
     infer_collection,
 )
 from agent.rag import answer_query, answer_query_all, summarize_diff, summarize_recent_changes
-from ingestion.quarantine import clear_quarantine, get_quarantined_files
+from ingestion.quarantine import clear_all_quarantine, clear_quarantine, get_quarantined_files
 from storage.db import init_db
 
 load_dotenv()
@@ -57,6 +57,10 @@ def _parse_command(text: str) -> tuple[str, str, str]:
 
     if subcommand not in {"ask", "clear-quarantine", "changes", "diff"}:
         return subcommand, "", rest
+
+    # If rest starts with a quote, there's no folder — entire rest is the query
+    if subcommand == "ask" and rest.startswith(('"', "'")):
+        return subcommand, "", re.sub(r'^["\']|["\']$', "", rest)
 
     rest_parts = rest.split(None, 1)
     folder = rest_parts[0] if rest_parts else ""
@@ -213,6 +217,12 @@ async def _handle_clear_quarantine(folder_name: str, filename: str) -> tuple[str
     return msg, [_section(msg)]
 
 
+async def _handle_clear_quarantine_all() -> tuple[str, list]:
+    count = await clear_all_quarantine()
+    msg = f"✅ Cleared all quarantine entries ({count} file(s)). Restart the agent to re-ingest."
+    return msg, [_section(msg)]
+
+
 async def _handle_diff(folder_name: str, filename: str) -> tuple[str, list]:
     if not folder_name or not filename:
         return _error_blocks("Usage: `/kb diff <FolderName> <filename>`")
@@ -238,7 +248,8 @@ def _help_blocks() -> tuple[str, list]:
         "• `/kb changes <FolderName>` — Summarize recent changes\n"
         "• `/kb status` — Watcher status and quarantined files\n"
         "• `/kb diff <FolderName> <filename>` — Summarize changes between last 2 versions\n"
-        "• `/kb clear-quarantine <FolderName> <filename>` — Remove file from quarantine"
+        "• `/kb clear-quarantine <FolderName> <filename>` — Remove file from quarantine\n"
+        "• `/kb clear-quarantine-all` — Clear all quarantined files and re-ingest on restart"
     )
     return "KB Agent Commands", [_section(text)]
 
@@ -265,6 +276,8 @@ async def handle_kb(ack, respond, command):
             fallback, blocks = await _handle_status()
         elif subcommand == "diff":
             fallback, blocks = await _handle_diff(folder, query)
+        elif subcommand == "clear-quarantine-all":
+            fallback, blocks = await _handle_clear_quarantine_all()
         elif subcommand == "clear-quarantine":
             fallback, blocks = await _handle_clear_quarantine(folder, query)
         else:

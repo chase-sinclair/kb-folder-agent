@@ -93,6 +93,16 @@ async def clear_quarantine(file_path: str) -> None:
         await db.commit()
 
 
+async def clear_all_quarantine() -> int:
+    async with get_db() as db:
+        async with db.execute("SELECT COUNT(*) FROM quarantine WHERE status = 'quarantined'") as cursor:
+            row = await cursor.fetchone()
+            count = row[0]
+        await db.execute("UPDATE quarantine SET status = 'cleared', last_attempted_at = ? WHERE status = 'quarantined'", (_now(),))
+        await db.commit()
+    return count
+
+
 async def purge_stale_quarantine(watched_root: str) -> int:
     """Delete quarantine records whose file_path no longer falls under watched_root."""
     watched_root = normalize_path(watched_root).rstrip("/") + "/"

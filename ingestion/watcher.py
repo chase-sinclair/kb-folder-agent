@@ -5,7 +5,9 @@ import os
 import re
 from pathlib import Path
 
+import aiohttp
 from dotenv import load_dotenv
+from qdrant_client.http.exceptions import UnexpectedResponse
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 
@@ -183,6 +185,7 @@ async def ingest_file(file_path: str) -> None:
             await quarantine_file(file_path, error_type, str(exc))
             log.error("Quarantined %s (%s): %s", file_path, error_type.value, exc)
 
+    log.debug("ingest_file: start %s", file_path)
     try:
         if not path.exists():
             raise FileNotFoundError(f"File not found: {file_path}")
@@ -190,18 +193,20 @@ async def ingest_file(file_path: str) -> None:
         if path.stat().st_size > MAX_FILE_SIZE:
             raise ValueError(f"File exceeds 50 MB: {file_path}")
 
-        file_hash = compute_file_hash(file_path)
+        file_hash = await asyncio.to_thread(compute_file_hash, file_path)
+        log.debug("ingest_file: hash=%s %s", file_hash[:8], file_path)
 
         latest_version = await get_latest_version(file_path)
         if latest_version is None or latest_version["file_hash"] != file_hash:
-            snapshot_text = _extract_text_for_snapshot(file_path)
+            snapshot_text = await asyncio.to_thread(_extract_text_for_snapshot, file_path)
             if snapshot_text is not None:
                 await store_version_snapshot(file_path, snapshot_text, file_hash)
 
         stored = await get_stored_chunks(file_path)
         stored_by_index = {r["chunk_index"]: r["chunk_hash"] for r in stored}
 
-        chunks = await chunk_file(file_path)
+        chunks = await asyncio.to_thread(chunk_file, file_path)
+        log.debug("ingest_file: chunked %d chunk(s) from %s", len(chunks) if chunks else 0, file_path)
         if not chunks:
             return
 
@@ -216,29 +221,30 @@ async def ingest_file(file_path: str) -> None:
         ]
 
         if not changed_chunks:
-            log.debug("No changed chunks for %s", file_path)
+            log.debug("ingest_file: no changed chunks for %s", file_path)
             return
 
+        log.debug("ingest_file: embedding %d chunk(s) for collection=%s", len(changed_chunks), collection_name)
         embedded = await embed_chunks(changed_chunks)
 
-        client = AsyncQdrantClient(url=QDRANT_URL)
-        await _ensure_collection(client, collection_name)
-
-        points = [
-            PointStruct(
-                id=abs(hash((file_path, item["chunk_index"]))) % (2**63),
-                vector=item["embedding"],
-                payload={
-                    "content": item["content"],
-                    "metadata": item["metadata"],
-                    "chunk_type": item["chunk_type"],
-                    "file_path": file_path,
-                },
-            )
-            for item in embedded
-        ]
-        await client.upsert(collection_name=collection_name, points=points)
-        await client.close()
+        log.debug("ingest_file: ensuring collection %r for %s", collection_name, file_path)
+        async with AsyncQdrantClient(url=QDRANT_URL) as client:
+            await _ensure_collection(client, collection_name)
+            log.debug("ingest_file: upserting %d point(s) to %r", len(embedded), collection_name)
+            points = [
+                PointStruct(
+                    id=abs(hash((file_path, item["chunk_index"]))) % (2**63),
+                    vector=item["embedding"],
+                    payload={
+                        "content": item["content"],
+                        "metadata": item["metadata"],
+                        "chunk_type": item["chunk_type"],
+                        "file_path": file_path,
+                    },
+                )
+                for item in embedded
+            ]
+            await client.upsert(collection_name=collection_name, points=points)
 
         from datetime import datetime, timezone
         now = datetime.now(timezone.utc).isoformat()
@@ -272,13 +278,12 @@ async def ingest_file(file_path: str) -> None:
         else:
             await handle_error(exc, ErrorType.CORRUPT_FILE)
     except Exception as exc:
-        from qdrant_client.http.exceptions import UnexpectedResponse
-        import aiohttp
         if isinstance(exc, UnexpectedResponse) and exc.status_code in (503, 429, 500):
             await handle_error(exc, ErrorType.TRANSIENT_ERROR)
         elif isinstance(exc, (aiohttp.ClientConnectionError, aiohttp.ServerTimeoutError, TimeoutError)):
             await handle_error(exc, ErrorType.TRANSIENT_ERROR)
         else:
+            log.debug("ingest_file: unclassified exception for %s", file_path, exc_info=True)
             await handle_error(exc, ErrorType.CORRUPT_FILE)
 
 
@@ -342,7 +347,10 @@ async def start_watcher() -> None:
             scan_tasks.append(ingest_file(str(path)))
 
     if scan_tasks:
-        await asyncio.gather(*scan_tasks, return_exceptions=True)
+        results = await asyncio.gather(*scan_tasks, return_exceptions=True)
+        for result in results:
+            if isinstance(result, Exception):
+                log.error("Unhandled exception escaped ingest_file during initial scan: %s", result, exc_info=result)
     log.info("Initial scan complete — %d file(s) processed", len(scan_tasks))
 
     loop = asyncio.get_running_loop()

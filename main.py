@@ -13,15 +13,26 @@ BACKEND = os.environ.get("BACKEND", "local")
 
 logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    level=logging.INFO,
+    level=logging.DEBUG,
 )
 log = logging.getLogger(__name__)
+
+_QUIET_LOGGERS = [
+    "watchdog",
+    "slack_bolt", "slack_bolt.AsyncApp", "slack_bolt.middleware",
+    "slack_sdk",
+    "httpx", "httpcore", "openai", "anthropic",
+    "urllib3", "asyncio",
+]
 
 
 async def main() -> None:
     from agent.digest import start_digest_scheduler
     from slack.bot import get_app, start_bot
     from storage.db import init_db
+
+    for _name in _QUIET_LOGGERS:
+        logging.getLogger(_name).setLevel(logging.WARNING)
 
     if BACKEND == "onedrive":
         from ingestion.onedrive_watcher import start_onedrive_watcher as start_watcher
@@ -36,7 +47,7 @@ async def main() -> None:
     try:
         app = await get_app()
         await asyncio.gather(start_watcher(), start_bot(), start_digest_scheduler(app))
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, asyncio.CancelledError):
         log.info("Shutting down — keyboard interrupt")
     except Exception as exc:
         log.error("Fatal error: %s", exc)
