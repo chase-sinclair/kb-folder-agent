@@ -145,3 +145,7 @@ All timestamps: ISO 8601 UTC.
 ## Known Fixes
 
 **`_ensure_collection` 409 race** — During initial scan, concurrent coroutines for the same collection both pass the `if name not in names` guard and race to `PUT /collections/{name}`. The second gets a 409 Conflict, which previously propagated as an exception and was caught by the generic handler, quarantining the file as `CORRUPT_FILE`. Fixed in both `ingestion/watcher.py` and `ingestion/onedrive_watcher.py`: catch `UnexpectedResponse(409)` inside `_ensure_collection` and treat it as a no-op; re-raise any other status code.
+
+**Transient Qdrant errors misclassified as CORRUPT_FILE** — Qdrant 503/429/500 responses and `aiohttp` connection/timeout errors were caught by the generic `except Exception` handler and quarantined permanently. Added `ErrorType.TRANSIENT_ERROR` to `ingestion/quarantine.py`; added it to `RETRYABLE_ERRORS` so it gets the same 3-retry backoff as `LOCKED_FILE`. Both watchers now detect `UnexpectedResponse` with status 503/429/500 and `aiohttp` connection/timeout errors and route them to `TRANSIENT_ERROR` instead of `CORRUPT_FILE`.
+
+**SQLite `database is locked` under concurrent access** — `aiosqlite.connect()` had no timeout, so concurrent writers (watcher + Slack handler) would immediately raise `OperationalError: database is locked`. Fixed in `storage/db.py`: `aiosqlite.connect(DB_PATH, timeout=30)` — SQLite will now retry for up to 30 seconds before raising.

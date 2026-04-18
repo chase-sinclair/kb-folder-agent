@@ -274,7 +274,14 @@ async def ingest_file(file_path: str) -> None:
         else:
             await handle_error(exc, ErrorType.CORRUPT_FILE)
     except Exception as exc:
-        await handle_error(exc, ErrorType.CORRUPT_FILE)
+        from qdrant_client.http.exceptions import UnexpectedResponse
+        import aiohttp
+        if isinstance(exc, UnexpectedResponse) and exc.status_code in (503, 429, 500):
+            await handle_error(exc, ErrorType.TRANSIENT_ERROR)
+        elif isinstance(exc, (aiohttp.ClientConnectionError, aiohttp.ServerTimeoutError, TimeoutError)):
+            await handle_error(exc, ErrorType.TRANSIENT_ERROR)
+        else:
+            await handle_error(exc, ErrorType.CORRUPT_FILE)
 
 
 async def delete_file(file_path: str) -> None:

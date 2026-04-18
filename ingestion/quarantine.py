@@ -12,6 +12,7 @@ class ErrorType(str, Enum):
     CORRUPT_FILE = "CORRUPT_FILE"
     TOO_LARGE = "TOO_LARGE"
     UNSUPPORTED_TYPE = "UNSUPPORTED_TYPE"
+    TRANSIENT_ERROR = "TRANSIENT_ERROR"
 
 
 def _now() -> str:
@@ -22,8 +23,11 @@ def normalize_path(file_path: str) -> str:
     return file_path.replace("\\", "/")
 
 
+RETRYABLE_ERRORS = {ErrorType.LOCKED_FILE, ErrorType.TRANSIENT_ERROR}
+
+
 def should_retry(error_type: ErrorType, retry_count: int) -> bool:
-    return error_type == ErrorType.LOCKED_FILE and retry_count < MAX_RETRIES
+    return error_type in RETRYABLE_ERRORS and retry_count < MAX_RETRIES
 
 
 async def quarantine_file(file_path: str, error_type: ErrorType, error_message: str) -> None:
