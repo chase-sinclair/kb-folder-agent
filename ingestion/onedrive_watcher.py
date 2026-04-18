@@ -15,6 +15,7 @@ from ingestion.quarantine import (
     ErrorType,
     increment_retry,
     is_quarantined,
+    purge_stale_quarantine,
     quarantine_file,
     should_retry,
 )
@@ -227,6 +228,9 @@ async def _scan_all() -> int:
 
 async def start_onedrive_watcher() -> None:
     await init_db()
+    purged = await purge_stale_quarantine(ONEDRIVE_FOLDER)
+    if purged:
+        log.info("Purged %d stale quarantine record(s) outside %s", purged, ONEDRIVE_FOLDER)
     log.info("Starting initial OneDrive scan of %s/%s", ONEDRIVE_FOLDER, "*")
 
     count = await _scan_all()

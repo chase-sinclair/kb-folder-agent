@@ -36,9 +36,30 @@ def normalize_path(file_path: str) -> str:
     return file_path.replace("\\", "/")
 
 
+def _format_table_for_slack(text: str) -> str:
+    """Convert markdown pipe tables to monospace code blocks."""
+    table_pattern = re.compile(
+        r"((?:^\|.+\|\n)+)",
+        re.MULTILINE,
+    )
+
+    def replace_table(match: re.Match) -> str:
+        raw = match.group(1).rstrip("\n")
+        rows = [row for row in raw.splitlines() if not re.match(r"^\|[-| :]+\|$", row)]
+        cells = [[c.strip() for c in row.strip("|").split("|")] for row in rows]
+        if not cells:
+            return match.group(0)
+        col_widths = [max(len(r[i]) if i < len(r) else 0 for r in cells) for i in range(len(cells[0]))]
+        lines = ["  ".join(cell.ljust(col_widths[i]) for i, cell in enumerate(row)) for row in cells]
+        return "```\n" + "\n".join(lines) + "\n```"
+
+    return table_pattern.sub(replace_table, text)
+
+
 def clean_for_slack(text: str) -> str:
+    text = _format_table_for_slack(text)
     text = re.sub(r"\*\*(.+?)\*\*", r"*\1*", text)
-    text = re.sub(r"^#{1,6}\s+(.+)$", r"\1", text, flags=re.MULTILINE)
+    text = re.sub(r"^#{1,6}\s+(.+)$", r"*\1*", text, flags=re.MULTILINE)
     text = re.sub(r"^-{3,}$", "", text, flags=re.MULTILINE)
     text = re.sub(r"^>\s*(.+)$", r"\1", text, flags=re.MULTILINE)
     text = re.sub(r"\n{3,}", "\n\n", text)
@@ -134,11 +155,7 @@ async def _handle_ask(folder_name: str, query: str) -> tuple[str, list]:
 
         if folder_name.lower() == "all":
             result = await answer_query_all(query)
-            blocks = [_header("💬 All Knowledge Bases"), _divider(), _section(clean_for_slack(result["answer"])), _divider()]
-            for col, sources in result["sources_by_collection"].items():
-                blocks.append(_context(f"📄 {col}: {', '.join(sources)}"))
-            if not result["sources_by_collection"]:
-                blocks.append(_context("📄 No sources found"))
+            blocks = [_header("💬 All Knowledge Bases"), _divider(), _section(clean_for_slack(result["answer"]))]
             return "💬 All Knowledge Bases", blocks
 
         collection_name = folder_to_collection_name(folder_name)
@@ -151,10 +168,9 @@ async def _handle_ask(folder_name: str, query: str) -> tuple[str, list]:
         _header(f"💬 {folder_name}"),
         _divider(),
         _section(clean_for_slack(result.answer)),
-        _divider(),
-        _context(f"📄 Sources: {', '.join(result.sources)}" if result.sources else "📄 No sources"),
     ]
     if inferred_label:
+        blocks.append(_divider())
         blocks.append(_context(inferred_label))
     return f"💬 {folder_name}", blocks
 
