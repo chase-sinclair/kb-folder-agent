@@ -141,3 +141,7 @@ All timestamps: ISO 8601 UTC.
 **V3-2** ✔ OneDrive poll-based watcher — `ingestion/onedrive_watcher.py`; hash-diff skip; same quarantine logic; `ONEDRIVE_POLL_INTERVAL`.
 **V3-3** ✔ Backend selection — `BACKEND=local|onedrive` switches MCP imports in orchestrator.py and watcher in main.py; all other layers unchanged.
 **V3-4** ✔ End-to-end validation — all RAG paths verified with `BACKEND=onedrive`: single-collection, multi-collection, inferred routing.
+
+## Known Fixes
+
+**`_ensure_collection` 409 race** — During initial scan, concurrent coroutines for the same collection both pass the `if name not in names` guard and race to `PUT /collections/{name}`. The second gets a 409 Conflict, which previously propagated as an exception and was caught by the generic handler, quarantining the file as `CORRUPT_FILE`. Fixed in both `ingestion/watcher.py` and `ingestion/onedrive_watcher.py`: catch `UnexpectedResponse(409)` inside `_ensure_collection` and treat it as a no-op; re-raise any other status code.
