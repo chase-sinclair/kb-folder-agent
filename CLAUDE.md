@@ -149,7 +149,7 @@ All timestamps: ISO 8601 UTC.
 - `agent/orchestrator.py`: `search()` threads `query_text=query` into `query_collection` (public API unchanged).
 - Both watchers: `_ensure_collection` updated to match; `PointStruct.vector` changed to dict `{"": dense, "text-sparse": sparse}` so each point carries both vectors at index time.
 - Existing collections: startup `update_collection` adds sparse config; points re-indexed with sparse vectors on next ingest cycle. Dense-only fallback ensures zero downtime during migration.
-**V4-2**
+**V4-2** ✔ Threaded follow-up questions — `/kb ask` now posts in-channel via `say()` (not ephemeral) so users can reply in the thread. A `@app.event("message")` handler fires on all thread replies; it verifies the thread root was posted by the bot (via `_bot_id` resolved at startup with `auth_test()`), extracts the collection name from the header block text (regex on `"💬 FolderName"`), builds conversation history from prior thread messages, and calls `answer_with_history()` in `agent/rag.py`. `answer_with_history` searches the collection with the new query, prepends the existing conversation history, and sends all messages plus retrieved context to Claude in a single API call. Bot only responds to threads it owns; all other threads are ignored. Requires `channels:history` scope and `message.channels` event subscription. Multi-collection (`all`) threads are skipped (no single collection to route to).
 **V4-3**
 **V4-4**
 **V4-5**

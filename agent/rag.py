@@ -203,6 +203,26 @@ async def summarize_diff(file_path: str) -> dict:
     }
 
 
+async def answer_with_history(collection_name: str, history: list[dict], query: str) -> RagResult:
+    if not query or not query.strip():
+        return RagResult(answer="Please provide a question.", sources=[], collection_name=collection_name, result_count=0)
+    try:
+        results = await search(collection_name, query, top_k=TOP_K)
+        context = _build_context(results) if results else "No relevant content found."
+        messages = list(history) + [{"role": "user", "content": f"Context:\n{context}\n\nQuestion: {query}"}]
+        response = await _client.messages.create(
+            model=MODEL,
+            max_tokens=MAX_TOKENS,
+            system=_SYSTEM_ANSWER,
+            messages=messages,
+        )
+        answer = response.content[0].text
+        return RagResult(answer=answer, sources=_unique_sources(results), collection_name=collection_name, result_count=len(results))
+    except Exception as exc:
+        log.error("answer_with_history failed for collection %r: %s", collection_name, exc)
+        raise
+
+
 async def summarize_recent_changes(collection_name: str, days: int = 3) -> RagResult:
     query = "What changed or was updated recently"
     try:

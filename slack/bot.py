@@ -14,7 +14,7 @@ from agent.orchestrator import (
     get_folder_list,
     infer_collection,
 )
-from agent.rag import answer_query, answer_query_all, summarize_diff, summarize_recent_changes
+from agent.rag import answer_query, answer_query_all, answer_with_history, summarize_diff, summarize_recent_changes
 from ingestion.quarantine import clear_all_quarantine, clear_quarantine, get_quarantined_files
 from storage.db import init_db
 
@@ -26,6 +26,8 @@ SLACK_BOT_TOKEN = os.environ["SLACK_BOT_TOKEN"]
 SLACK_SIGNING_SECRET = os.environ["SLACK_SIGNING_SECRET"]
 
 app = AsyncApp(token=SLACK_BOT_TOKEN, signing_secret=SLACK_SIGNING_SECRET)
+
+_bot_id: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -271,11 +273,92 @@ def _help_blocks() -> tuple[str, list]:
 
 
 # ---------------------------------------------------------------------------
+# Thread follow-up helpers
+# ---------------------------------------------------------------------------
+
+def _extract_collection_from_thread(message: dict) -> str | None:
+    """Parse the collection name from the header block of a bot's /kb ask reply."""
+    for block in message.get("blocks", []):
+        if block.get("type") == "header":
+            text = block.get("text", {}).get("text", "")
+            match = re.match(r"💬\s+(.+)", text)
+            if match:
+                folder = match.group(1).strip()
+                if "all knowledge bases" in folder.lower():
+                    return None
+                return folder_to_collection_name(folder)
+    return None
+
+
+def _build_thread_history(messages: list[dict], bot_id: str) -> list[dict]:
+    """Convert a slice of thread messages into Claude conversation history."""
+    history = []
+    for msg in messages:
+        text = msg.get("text", "").strip()
+        if not text or msg.get("subtype"):
+            continue
+        if msg.get("bot_id") == bot_id:
+            history.append({"role": "assistant", "content": text})
+        elif not msg.get("bot_id"):
+            history.append({"role": "user", "content": text})
+    return history
+
+
+@app.event("message")
+async def handle_thread_reply(event, client):
+    """Reply in-thread when a user follows up in a thread the bot started."""
+    if event.get("subtype"):
+        return
+
+    thread_ts = event.get("thread_ts")
+    ts = event.get("ts")
+    if not thread_ts or thread_ts == ts:
+        return
+
+    if _bot_id is None:
+        return
+
+    channel = event.get("channel", "")
+    user_text = event.get("text", "").strip()
+    if not user_text:
+        return
+
+    try:
+        result = await client.conversations_replies(channel=channel, ts=thread_ts, limit=50)
+        messages = result.get("messages", [])
+        if not messages:
+            return
+
+        first_msg = messages[0]
+        if first_msg.get("bot_id") != _bot_id:
+            return
+
+        collection_name = _extract_collection_from_thread(first_msg)
+        if not collection_name:
+            return
+
+        thread_msgs = [m for m in messages if m.get("ts") != ts]
+        history = _build_thread_history(thread_msgs, _bot_id)
+
+        rag_result = await answer_with_history(collection_name, history, user_text)
+        answer_text = clean_for_slack(rag_result.answer)
+
+        await client.chat_postMessage(
+            channel=channel,
+            thread_ts=thread_ts,
+            text=rag_result.answer,
+            blocks=[_section(answer_text)],
+        )
+    except Exception as exc:
+        log.error("Thread reply handler error in channel %s: %s", channel, exc)
+
+
+# ---------------------------------------------------------------------------
 # Slash command handler
 # ---------------------------------------------------------------------------
 
 @app.command("/kb")
-async def handle_kb(ack, respond, command):
+async def handle_kb(ack, respond, say, command):
     await ack()
 
     text = command.get("text", "")
@@ -302,7 +385,10 @@ async def handle_kb(ack, respond, command):
         log.error("Error handling /kb %s: %s", subcommand, exc)
         fallback, blocks = _error_blocks(f"An error occurred: {exc}\nTry `/kb` for usage help.")
 
-    await respond(text=fallback, blocks=blocks)
+    if subcommand == "ask":
+        await say(text=fallback, blocks=blocks)
+    else:
+        await respond(text=fallback, blocks=blocks)
 
 
 # ---------------------------------------------------------------------------
@@ -314,7 +400,12 @@ async def get_app() -> AsyncApp:
 
 
 async def start_bot() -> None:
+    global _bot_id
     await init_db()
+
+    auth = await app.client.auth_test()
+    _bot_id = auth.get("bot_id")
+    log.info("Bot ID resolved: %s", _bot_id)
 
     slack_app_token = os.environ.get("SLACK_APP_TOKEN")
     if slack_app_token:
