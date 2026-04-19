@@ -49,6 +49,7 @@ async def search(collection_name: str, query: str, top_k: int = 5) -> list[dict]
             collection_name=collection_name,
             query_vector=vector,
             top_k=top_k,
+            query_text=query,
         )
     except Exception as exc:
         log.error("search failed for collection %r, query %r: %s", collection_name, query, exc)

@@ -103,6 +103,20 @@ async def clear_all_quarantine() -> int:
     return count
 
 
+async def purge_orphaned_chunks(valid_prefix: str) -> int:
+    """Delete chunk records whose file_path doesn't start with valid_prefix."""
+    valid_prefix = normalize_path(valid_prefix).rstrip("/") + "/"
+    async with get_db() as db:
+        async with db.execute("SELECT DISTINCT file_path FROM chunks") as cursor:
+            rows = await cursor.fetchall()
+        orphans = [r["file_path"] for r in rows if not normalize_path(r["file_path"]).startswith(valid_prefix)]
+        for fp in orphans:
+            await db.execute("DELETE FROM chunks WHERE file_path = ?", (fp,))
+        if orphans:
+            await db.commit()
+    return len(orphans)
+
+
 async def purge_stale_quarantine(watched_root: str) -> int:
     """Delete quarantine records whose file_path no longer falls under watched_root."""
     watched_root = normalize_path(watched_root).rstrip("/") + "/"

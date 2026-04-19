@@ -15,6 +15,7 @@ from ingestion.quarantine import (
     ErrorType,
     increment_retry,
     is_quarantined,
+    purge_orphaned_chunks,
     purge_stale_quarantine,
     quarantine_file,
     should_retry,
@@ -61,18 +62,28 @@ def _compute_hash_from_bytes(data: bytes) -> str:
 # ---------------------------------------------------------------------------
 
 async def _ensure_collection(client, collection_name: str) -> None:
-    from qdrant_client.models import Distance, VectorParams
+    from qdrant_client.models import Distance, SparseIndexParams, SparseVectorParams, VectorParams
+    from mcp_servers.vectordb_server import SPARSE_VECTOR_NAME
 
+    sparse_config = {SPARSE_VECTOR_NAME: SparseVectorParams(index=SparseIndexParams())}
     try:
         await client.create_collection(
             collection_name=collection_name,
             vectors_config=VectorParams(size=1536, distance=Distance.COSINE),
+            sparse_vectors_config=sparse_config,
         )
         log.info("Created Qdrant collection %r", collection_name)
     except Exception as exc:
         msg = str(exc)
         if "409" in msg or "already exists" in msg.lower():
             log.debug("Collection %r already exists (concurrent create), continuing", collection_name)
+            try:
+                await client.update_collection(
+                    collection_name=collection_name,
+                    sparse_vectors_config=sparse_config,
+                )
+            except Exception:
+                pass
         else:
             raise
 
@@ -145,12 +156,17 @@ async def ingest_onedrive_file(file_path: str, folder_name: str) -> None:
         # All chunks are "changed" since we compare at file-hash level
         embedded = await embed_chunks(chunks)
 
-        async with AsyncQdrantClient(url=QDRANT_URL) as client:
+        from mcp_servers.vectordb_server import SPARSE_VECTOR_NAME, build_sparse_vector
+        client = AsyncQdrantClient(url=QDRANT_URL)
+        try:
             await _ensure_collection(client, collection_name)
             points = [
                 PointStruct(
                     id=abs(hash((file_path, item["chunk_index"]))) % (2**63),
-                    vector=item["embedding"],
+                    vector={
+                        "": item["embedding"],
+                        SPARSE_VECTOR_NAME: build_sparse_vector(item["content"]),
+                    },
                     payload={
                         "content": item["content"],
                         "metadata": item["metadata"],
@@ -161,6 +177,8 @@ async def ingest_onedrive_file(file_path: str, folder_name: str) -> None:
                 for item in embedded
             ]
             await client.upsert(collection_name=collection_name, points=points)
+        finally:
+            await client.close()
 
         now = datetime.now(timezone.utc).isoformat()
         async with get_db() as db:
@@ -227,10 +245,15 @@ async def _scan_all() -> int:
 # ---------------------------------------------------------------------------
 
 async def start_onedrive_watcher() -> None:
+    from mcp_servers.vectordb_server import purge_orphaned_qdrant_points
     await init_db()
-    purged = await purge_stale_quarantine(ONEDRIVE_FOLDER)
-    if purged:
-        log.info("Purged %d stale quarantine record(s) outside %s", purged, ONEDRIVE_FOLDER)
+    valid_prefix = ONEDRIVE_FOLDER
+    purged_q = await purge_stale_quarantine(valid_prefix)
+    purged_c = await purge_orphaned_chunks(valid_prefix)
+    purged_v = await purge_orphaned_qdrant_points(valid_prefix)
+    if purged_q or purged_c or purged_v:
+        log.info("Startup cleanup: %d quarantine, %d chunk DB, %d Qdrant point(s) removed (outside %s)",
+                 purged_q, purged_c, purged_v, ONEDRIVE_FOLDER)
     log.info("Starting initial OneDrive scan of %s/%s", ONEDRIVE_FOLDER, "*")
 
     count = await _scan_all()

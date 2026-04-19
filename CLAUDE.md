@@ -142,6 +142,19 @@ All timestamps: ISO 8601 UTC.
 **V3-3** ✔ Backend selection — `BACKEND=local|onedrive` switches MCP imports in orchestrator.py and watcher in main.py; all other layers unchanged.
 **V3-4** ✔ End-to-end validation — all RAG paths verified with `BACKEND=onedrive`: single-collection, multi-collection, inferred routing.
 
+## V4 Phases
+
+**V4-1** ✔ Hybrid search — dense vector + BM25-style sparse vectors via Qdrant native API.
+- `mcp_servers/vectordb_server.py`: `build_sparse_vector(text)` tokenises with regex, hashes tokens to 24-bit indices, weights by `1+log(tf)`; `SPARSE_VECTOR_NAME = "text-sparse"`; `_ensure_collection` provisions sparse config on create and calls `update_collection` on existing 409; `query_collection` accepts optional `query_text`, runs `Prefetch` (dense + sparse) with `Fusion.RRF`, falls back to dense-only on any error.
+- `agent/orchestrator.py`: `search()` threads `query_text=query` into `query_collection` (public API unchanged).
+- Both watchers: `_ensure_collection` updated to match; `PointStruct.vector` changed to dict `{"": dense, "text-sparse": sparse}` so each point carries both vectors at index time.
+- Existing collections: startup `update_collection` adds sparse config; points re-indexed with sparse vectors on next ingest cycle. Dense-only fallback ensures zero downtime during migration.
+**V4-2**
+**V4-3**
+**V4-4**
+**V4-5**
+
+
 ## Known Fixes
 
 **`_ensure_collection` 409 race** — During initial scan, concurrent coroutines for the same collection both pass a check-then-create guard and race to `PUT /collections/{name}`. The second gets a 409 Conflict, quarantining the file as `CORRUPT_FILE`. Fixed in both watchers: dropped the `get_collections()` pre-check entirely; now unconditionally attempts `create_collection` and catches any exception whose string contains `"409"` or `"already exists"` — re-raises all others. This eliminates the TOCTOU window and avoids a fragile `UnexpectedResponse` import path dependency.

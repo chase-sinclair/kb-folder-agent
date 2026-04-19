@@ -19,6 +19,7 @@ from ingestion.quarantine import (
     increment_retry,
     is_quarantined,
     normalize_path,
+    purge_orphaned_chunks,
     purge_stale_quarantine,
     quarantine_file,
     should_retry,
@@ -131,18 +132,28 @@ def _extract_text_for_snapshot(file_path: str) -> str | None:
 # ---------------------------------------------------------------------------
 
 async def _ensure_collection(client, collection_name: str) -> None:
-    from qdrant_client.models import Distance, VectorParams
+    from qdrant_client.models import Distance, SparseIndexParams, SparseVectorParams, VectorParams
+    from mcp_servers.vectordb_server import SPARSE_VECTOR_NAME
 
+    sparse_config = {SPARSE_VECTOR_NAME: SparseVectorParams(index=SparseIndexParams())}
     try:
         await client.create_collection(
             collection_name=collection_name,
             vectors_config=VectorParams(size=1536, distance=Distance.COSINE),
+            sparse_vectors_config=sparse_config,
         )
         log.info("Created Qdrant collection %r", collection_name)
     except Exception as exc:
         msg = str(exc)
         if "409" in msg or "already exists" in msg.lower():
             log.debug("Collection %r already exists (concurrent create), continuing", collection_name)
+            try:
+                await client.update_collection(
+                    collection_name=collection_name,
+                    sparse_vectors_config=sparse_config,
+                )
+            except Exception:
+                pass
         else:
             raise
 
@@ -228,13 +239,18 @@ async def ingest_file(file_path: str) -> None:
         embedded = await embed_chunks(changed_chunks)
 
         log.debug("ingest_file: ensuring collection %r for %s", collection_name, file_path)
-        async with AsyncQdrantClient(url=QDRANT_URL) as client:
+        from mcp_servers.vectordb_server import SPARSE_VECTOR_NAME, build_sparse_vector
+        client = AsyncQdrantClient(url=QDRANT_URL)
+        try:
             await _ensure_collection(client, collection_name)
             log.debug("ingest_file: upserting %d point(s) to %r", len(embedded), collection_name)
             points = [
                 PointStruct(
                     id=abs(hash((file_path, item["chunk_index"]))) % (2**63),
-                    vector=item["embedding"],
+                    vector={
+                        "": item["embedding"],
+                        SPARSE_VECTOR_NAME: build_sparse_vector(item["content"]),
+                    },
                     payload={
                         "content": item["content"],
                         "metadata": item["metadata"],
@@ -245,6 +261,8 @@ async def ingest_file(file_path: str) -> None:
                 for item in embedded
             ]
             await client.upsert(collection_name=collection_name, points=points)
+        finally:
+            await client.close()
 
         from datetime import datetime, timezone
         now = datetime.now(timezone.utc).isoformat()
@@ -335,10 +353,15 @@ class KBEventHandler(FileSystemEventHandler):
 # ---------------------------------------------------------------------------
 
 async def start_watcher() -> None:
+    from mcp_servers.vectordb_server import purge_orphaned_qdrant_points
     await init_db()
-    purged = await purge_stale_quarantine(str(WATCHED_FOLDER))
-    if purged:
-        log.info("Purged %d stale quarantine record(s) outside %s", purged, WATCHED_FOLDER)
+    valid_prefix = normalize_path(str(WATCHED_FOLDER))
+    purged_q = await purge_stale_quarantine(valid_prefix)
+    purged_c = await purge_orphaned_chunks(valid_prefix)
+    purged_v = await purge_orphaned_qdrant_points(valid_prefix)
+    if purged_q or purged_c or purged_v:
+        log.info("Startup cleanup: %d quarantine, %d chunk DB, %d Qdrant point(s) removed (outside %s)",
+                 purged_q, purged_c, purged_v, WATCHED_FOLDER)
     log.info("Starting initial scan of %s", WATCHED_FOLDER)
 
     scan_tasks = []
