@@ -30,7 +30,7 @@ async def get_available_collections() -> list[dict]:
     try:
         return await list_collections()
     except Exception as exc:
-        log.error("get_available_collections failed: %s", exc)
+        log.error("get_available_collections failed: %r", exc)
         raise
 
 

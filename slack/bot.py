@@ -319,7 +319,7 @@ async def handle_thread_reply(event, client):
         return
 
     channel = event.get("channel", "")
-    user_text = event.get("text", "").strip()
+    user_text = re.sub(r"<@[A-Z0-9]+>", "", event.get("text", "")).strip()
     if not user_text:
         return
 
@@ -386,7 +386,15 @@ async def handle_kb(ack, respond, say, command):
         fallback, blocks = _error_blocks(f"An error occurred: {exc}\nTry `/kb` for usage help.")
 
     if subcommand == "ask":
-        await say(text=fallback, blocks=blocks)
+        try:
+            await say(text=fallback, blocks=blocks)
+        except Exception as exc:
+            if "not_in_channel" in str(exc):
+                note = "\n\n_Tip: invite the bot to this channel with `/invite @<bot-name>` to enable threaded follow-ups._"
+                await respond(text=fallback + note, blocks=blocks)
+            else:
+                log.error("say() failed for /kb ask: %s", exc)
+                await respond(text=fallback, blocks=blocks)
     else:
         await respond(text=fallback, blocks=blocks)
 

@@ -353,15 +353,16 @@ class KBEventHandler(FileSystemEventHandler):
 # ---------------------------------------------------------------------------
 
 async def start_watcher() -> None:
-    from mcp_servers.vectordb_server import purge_orphaned_qdrant_points
+    from mcp_servers.vectordb_server import purge_chunks_for_missing_collections, purge_orphaned_qdrant_points
     await init_db()
     valid_prefix = normalize_path(str(WATCHED_FOLDER))
     purged_q = await purge_stale_quarantine(valid_prefix)
     purged_c = await purge_orphaned_chunks(valid_prefix)
     purged_v = await purge_orphaned_qdrant_points(valid_prefix)
-    if purged_q or purged_c or purged_v:
-        log.info("Startup cleanup: %d quarantine, %d chunk DB, %d Qdrant point(s) removed (outside %s)",
-                 purged_q, purged_c, purged_v, WATCHED_FOLDER)
+    purged_m = await purge_chunks_for_missing_collections()
+    if purged_q or purged_c or purged_v or purged_m:
+        log.info("Startup cleanup: %d quarantine, %d chunk DB, %d Qdrant point(s), %d missing-collection record(s) removed",
+                 purged_q, purged_c, purged_v, purged_m)
     log.info("Starting initial scan of %s", WATCHED_FOLDER)
 
     scan_tasks = []

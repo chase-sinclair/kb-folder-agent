@@ -15,7 +15,13 @@
       "Bash(.venv/Scripts/python test_onedrive_auth.py)",
       "Bash(.venv/Scripts/python -c ' *)",
       "Bash(.venv/Scripts/python main.py)",
-      "Bash(cat /tmp/main_out.txt)"
+      "Bash(cat /tmp/main_out.txt)",
+      "Bash(pip show *)",
+      "Bash(python -c \"from qdrant_client import models; help\\(models.Prefetch\\)\")",
+      "Bash(curl -s http://localhost:6333/)",
+      "Bash(python -m json.tool)",
+      "Bash(python *)",
+      "Bash(grep -v \"^$\")"
     ]
   }
 }

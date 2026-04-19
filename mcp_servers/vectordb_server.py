@@ -11,9 +11,7 @@ from qdrant_client.models import (
     Distance,
     FieldCondition,
     Filter,
-    Fusion,
     MatchValue,
-    Prefetch,
     PointStruct,
     SparseIndexParams,
     SparseVector,
@@ -56,6 +54,27 @@ def build_sparse_vector(text: str) -> SparseVector:
 
 async def _get_client() -> AsyncQdrantClient:
     return AsyncQdrantClient(url=QDRANT_URL)
+
+
+async def purge_chunks_for_missing_collections() -> int:
+    """Delete SQLite chunk records whose Qdrant collection no longer exists."""
+    from storage.db import get_db
+    client = AsyncQdrantClient(url=QDRANT_URL)
+    try:
+        response = await client.get_collections()
+        existing = {c.name for c in response.collections}
+    finally:
+        await client.close()
+
+    async with get_db() as db:
+        async with db.execute("SELECT DISTINCT collection_name FROM chunks") as cursor:
+            rows = await cursor.fetchall()
+        stale = [r["collection_name"] for r in rows if r["collection_name"] not in existing]
+        for col in stale:
+            await db.execute("DELETE FROM chunks WHERE collection_name = ?", (col,))
+        if stale:
+            await db.commit()
+    return len(stale)
 
 
 async def purge_orphaned_qdrant_points(valid_prefix: str) -> int:
@@ -158,6 +177,20 @@ def _hits_to_dicts(points) -> list[dict]:
     ]
 
 
+def _rrf_merge(dense_hits: list, sparse_hits: list, top_k: int, k: int = 60) -> list:
+    """Reciprocal Rank Fusion of two ranked lists."""
+    scores: dict[int, float] = {}
+    payloads: dict[int, object] = {}
+    for rank, hit in enumerate(dense_hits):
+        scores[hit.id] = scores.get(hit.id, 0.0) + 1.0 / (k + rank + 1)
+        payloads[hit.id] = hit
+    for rank, hit in enumerate(sparse_hits):
+        scores[hit.id] = scores.get(hit.id, 0.0) + 1.0 / (k + rank + 1)
+        payloads.setdefault(hit.id, hit)
+    ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)[:top_k]
+    return [payloads[pid] for pid, _ in ranked]
+
+
 @mcp.tool()
 async def query_collection(
     collection_name: str,
@@ -177,24 +210,30 @@ async def query_collection(
             sparse_vec = build_sparse_vector(query_text)
             if sparse_vec.indices:
                 try:
-                    response = await client.query_points(
+                    dense_resp = await client.query_points(
                         collection_name=collection_name,
-                        prefetch=[
-                            Prefetch(query=query_vector, using=None, limit=top_k * 2),
-                            Prefetch(query=sparse_vec, using=SPARSE_VECTOR_NAME, limit=top_k * 2),
-                        ],
-                        query=Fusion.RRF,
-                        limit=top_k,
+                        query=query_vector,
+                        using="",
+                        limit=top_k * 2,
                         with_payload=True,
                     )
-                    log.debug("Hybrid search on %r returned %d result(s)", collection_name, len(response.points))
-                    return _hits_to_dicts(response.points)
+                    sparse_resp = await client.query_points(
+                        collection_name=collection_name,
+                        query=sparse_vec,
+                        using=SPARSE_VECTOR_NAME,
+                        limit=top_k * 2,
+                        with_payload=True,
+                    )
+                    merged = _rrf_merge(dense_resp.points, sparse_resp.points, top_k)
+                    log.debug("Hybrid RRF on %r: dense=%d sparse=%d merged=%d", collection_name, len(dense_resp.points), len(sparse_resp.points), len(merged))
+                    return _hits_to_dicts(merged)
                 except Exception as exc:
                     log.warning("Hybrid search failed for %r, falling back to dense: %s", collection_name, exc)
 
         response = await client.query_points(
             collection_name=collection_name,
             query=query_vector,
+            using="",
             limit=top_k,
             with_payload=True,
         )

@@ -98,7 +98,7 @@ async def ingest_onedrive_file(file_path: str, folder_name: str) -> None:
     from mcp_servers.onedrive_server import get_metadata, read_file as od_read_file
 
     if await is_quarantined(file_path):
-        log.debug("Skipping quarantined OneDrive file: %s", file_path)
+        log.warning("Skipping quarantined OneDrive file: %s", file_path)
         return
 
     async def handle_error(exc: Exception, error_type: ErrorType) -> None:
@@ -115,6 +115,7 @@ async def ingest_onedrive_file(file_path: str, folder_name: str) -> None:
         from mcp_servers.onedrive_server import _download_to_temp
         meta = await asyncio.to_thread(get_metadata, file_path)
         if not meta.get("exists"):
+            log.warning("OneDrive file not found (skipping): %s", file_path)
             return
 
         if meta.get("size_bytes", 0) > MAX_FILE_SIZE:
@@ -149,6 +150,7 @@ async def ingest_onedrive_file(file_path: str, folder_name: str) -> None:
         tmp_path = None
 
         if not chunks:
+            log.warning("No chunks extracted from OneDrive file (skipping): %s", file_path)
             return
 
         collection_name = get_collection_name(folder_name)
@@ -235,7 +237,10 @@ async def _scan_all() -> int:
             tasks.append(ingest_onedrive_file(f["file_path"], folder_name))
 
     if tasks:
-        await asyncio.gather(*tasks, return_exceptions=True)
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        for result in results:
+            if isinstance(result, Exception):
+                log.error("Unhandled exception during OneDrive scan: %r", result)
 
     return len(tasks)
 
@@ -245,15 +250,16 @@ async def _scan_all() -> int:
 # ---------------------------------------------------------------------------
 
 async def start_onedrive_watcher() -> None:
-    from mcp_servers.vectordb_server import purge_orphaned_qdrant_points
+    from mcp_servers.vectordb_server import purge_chunks_for_missing_collections, purge_orphaned_qdrant_points
     await init_db()
     valid_prefix = ONEDRIVE_FOLDER
     purged_q = await purge_stale_quarantine(valid_prefix)
     purged_c = await purge_orphaned_chunks(valid_prefix)
     purged_v = await purge_orphaned_qdrant_points(valid_prefix)
-    if purged_q or purged_c or purged_v:
-        log.info("Startup cleanup: %d quarantine, %d chunk DB, %d Qdrant point(s) removed (outside %s)",
-                 purged_q, purged_c, purged_v, ONEDRIVE_FOLDER)
+    purged_m = await purge_chunks_for_missing_collections()
+    if purged_q or purged_c or purged_v or purged_m:
+        log.info("Startup cleanup: %d quarantine, %d chunk DB, %d Qdrant point(s), %d missing-collection record(s) removed",
+                 purged_q, purged_c, purged_v, purged_m)
     log.info("Starting initial OneDrive scan of %s/%s", ONEDRIVE_FOLDER, "*")
 
     count = await _scan_all()
