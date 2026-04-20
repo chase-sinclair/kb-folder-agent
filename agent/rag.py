@@ -42,6 +42,30 @@ _SYSTEM_DIFF = (
     "Be concise and specific."
 )
 
+_SYSTEM_GAPS = (
+    "You are a proposal readiness analyst performing a critical gap analysis on a knowledge base. "
+    "You are given content chunks from the knowledge base. Identify what is ABSENT or THIN — not what is present.\n\n"
+    "Classify gaps as:\n"
+    "- Hard Gap: Completely absent — no mention, no evidence anywhere in the provided content.\n"
+    "- Soft Gap: Mentioned but thin — only one reference, no metrics, no COR/CO quotes, insufficient detail.\n\n"
+    "Rules:\n"
+    "- Be specific and actionable. 'No past performance with IL5 authorization' is good. "
+    "'Documentation could be more comprehensive' is not.\n"
+    "- For each gap, suggest the specific document or content that would fill it.\n"
+    "- End with a single Priority line: the most impactful gap to address first.\n"
+    "- Do not summarize what is present. Only report gaps.\n"
+    "- Do not use markdown tables.\n\n"
+    "Format your response exactly as:\n\n"
+    "**Hard Gaps**\n"
+    "• [specific gap]: [what would fill it]\n"
+    "(maximum 4 hard gaps)\n\n"
+    "**Soft Gaps**\n"
+    "• [specific gap]: [what would fill it]\n"
+    "(maximum 4 soft gaps)\n\n"
+    "**Priority**\n"
+    "[one-line recommendation]"
+)
+
 _SYSTEM_ALL = (
     "You are a knowledge base assistant with access to multiple knowledge bases. "
     "Answer the user's question using only the provided context. "
@@ -220,6 +244,35 @@ async def answer_with_history(collection_name: str, history: list[dict], query: 
         return RagResult(answer=answer, sources=_unique_sources(results), collection_name=collection_name, result_count=len(results))
     except Exception as exc:
         log.error("answer_with_history failed for collection %r: %s", collection_name, exc)
+        raise
+
+
+async def find_gaps(collection_name: str, topic: str) -> RagResult:
+    if not topic or not topic.strip():
+        return RagResult(answer="Please provide a topic.", sources=[], collection_name=collection_name, result_count=0)
+    try:
+        results = await search(collection_name, topic, top_k=20)
+
+        if len(results) < 5:
+            return RagResult(
+                answer="Not enough content to perform a meaningful gap analysis (fewer than 5 chunks found).",
+                sources=[],
+                collection_name=collection_name,
+                result_count=len(results),
+            )
+
+        context = _build_context(results)
+        user_prompt = f"Knowledge base content:\n{context}\n\nTopic for gap analysis: {topic}"
+        answer = await _call_claude(_SYSTEM_GAPS, user_prompt)
+
+        return RagResult(
+            answer=answer,
+            sources=_unique_sources(results),
+            collection_name=collection_name,
+            result_count=len(results),
+        )
+    except Exception as exc:
+        log.error("find_gaps failed for collection %r: %s", collection_name, exc)
         raise
 
 

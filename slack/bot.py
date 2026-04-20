@@ -14,7 +14,7 @@ from agent.orchestrator import (
     get_folder_list,
     infer_collection,
 )
-from agent.rag import answer_query, answer_query_all, answer_with_history, summarize_diff, summarize_recent_changes
+from agent.rag import answer_query, answer_query_all, answer_with_history, find_gaps, summarize_diff, summarize_recent_changes
 from ingestion.quarantine import clear_all_quarantine, clear_quarantine, get_quarantined_files
 from storage.db import init_db
 
@@ -78,7 +78,7 @@ def _parse_command(text: str) -> tuple[str, str, str]:
     subcommand = parts[0].lower()
     rest = parts[1].strip() if len(parts) > 1 else ""
 
-    if subcommand not in {"ask", "clear-quarantine", "changes", "diff"}:
+    if subcommand not in {"ask", "clear-quarantine", "changes", "diff", "gaps"}:
         return subcommand, "", rest
 
     # If rest starts with a quote, there's no folder — entire rest is the query
@@ -258,6 +258,30 @@ async def _handle_diff(folder_name: str, filename: str) -> tuple[str, list]:
     return f"🔍 Document Diff — {filename}", blocks
 
 
+async def _handle_gaps(folder_name: str, topic: str) -> tuple[str, list]:
+    if not folder_name or not topic:
+        return _error_blocks('Usage: `/kb gaps <FolderName> "<topic>"`')
+
+    collection_name = folder_to_collection_name(folder_name)
+    if not await collection_exists(collection_name):
+        msg = f"No knowledge base found for `{folder_name}`. Use `/kb list` to see available folders."
+        return _error_blocks(msg)
+
+    result = await find_gaps(collection_name, topic)
+
+    if result.result_count < 5:
+        return _error_blocks(result.answer)
+
+    blocks = [
+        _header(f"🔍 Gaps — {folder_name} vs \"{topic}\""),
+        _divider(),
+        _section(clean_for_slack(result.answer)),
+        _divider(),
+        _context(f"📄 Analyzed {result.result_count} chunk(s) from {len(result.sources)} source(s)"),
+    ]
+    return f"🔍 Gaps — {folder_name} vs \"{topic}\"", blocks
+
+
 def _help_blocks() -> tuple[str, list]:
     text = (
         "*KB Agent Commands*\n"
@@ -266,6 +290,7 @@ def _help_blocks() -> tuple[str, list]:
         "• `/kb changes <FolderName>` — Summarize recent changes\n"
         "• `/kb status` — Watcher status and quarantined files\n"
         "• `/kb diff <FolderName> <filename>` — Summarize changes between last 2 versions\n"
+        "• `/kb gaps <FolderName> \"<topic>\"` — Gap analysis: what's missing relative to a topic\n"
         "• `/kb clear-quarantine <FolderName> <filename>` — Remove file from quarantine\n"
         "• `/kb clear-quarantine-all` — Clear all quarantined files and re-ingest on restart"
     )
@@ -281,7 +306,7 @@ def _extract_collection_from_thread(message: dict) -> str | None:
     for block in message.get("blocks", []):
         if block.get("type") == "header":
             text = block.get("text", {}).get("text", "")
-            match = re.match(r"💬\s+(.+)", text)
+            match = re.match(r"(?:💬|:speech_balloon:)\s+(.+)", text)
             if match:
                 folder = match.group(1).strip()
                 if "all knowledge bases" in folder.lower():
@@ -294,24 +319,32 @@ def _build_thread_history(messages: list[dict], bot_id: str) -> list[dict]:
     """Convert a slice of thread messages into Claude conversation history."""
     history = []
     for msg in messages:
-        text = msg.get("text", "").strip()
-        if not text or msg.get("subtype"):
+        if msg.get("subtype"):
             continue
         if msg.get("bot_id") == bot_id:
-            history.append({"role": "assistant", "content": text})
+            # Prefer section block text over the fallback text field
+            content = next(
+                (b.get("text", {}).get("text", "") for b in msg.get("blocks", []) if b.get("type") == "section"),
+                msg.get("text", ""),
+            ).strip()
+            if content:
+                history.append({"role": "assistant", "content": content})
         elif not msg.get("bot_id"):
-            history.append({"role": "user", "content": text})
+            text = msg.get("text", "").strip()
+            if text:
+                history.append({"role": "user", "content": text})
     return history
 
 
 @app.event("message")
 async def handle_thread_reply(event, client):
     """Reply in-thread when a user follows up in a thread the bot started."""
-    if event.get("subtype"):
-        return
-
+    subtype = event.get("subtype")
     thread_ts = event.get("thread_ts")
     ts = event.get("ts")
+    if subtype:
+        return
+
     if not thread_ts or thread_ts == ts:
         return
 
@@ -327,6 +360,7 @@ async def handle_thread_reply(event, client):
         result = await client.conversations_replies(channel=channel, ts=thread_ts, limit=50)
         messages = result.get("messages", [])
         if not messages:
+            log.warning("Thread reply: no messages returned for thread_ts=%s", thread_ts)
             return
 
         first_msg = messages[0]
@@ -379,6 +413,8 @@ async def handle_kb(ack, respond, say, command):
             fallback, blocks = await _handle_clear_quarantine_all()
         elif subcommand == "clear-quarantine":
             fallback, blocks = await _handle_clear_quarantine(folder, query)
+        elif subcommand == "gaps":
+            fallback, blocks = await _handle_gaps(folder, query)
         else:
             fallback, blocks = _help_blocks()
     except Exception as exc:
