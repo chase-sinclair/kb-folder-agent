@@ -66,6 +66,36 @@ _SYSTEM_GAPS = (
     "[one-line recommendation]"
 )
 
+_SYSTEM_SCORE = (
+    "You are a federal proposal evaluator applying an adjectival rating scale to assess how well a knowledge base "
+    "supports a specific RFP requirement.\n\n"
+    "Scoring scale:\n"
+    "9–10 Outstanding: specific, measurable, directly relevant evidence with COR/CO validation\n"
+    "7–8 Good: solid evidence but missing one key element (metrics, reference, or scale)\n"
+    "5–6 Acceptable: relevant experience exists but is indirect or lacks detail\n"
+    "3–4 Marginal: tangential evidence only, significant gaps\n"
+    "1–2 Unacceptable: no relevant evidence found\n\n"
+    "Instructions:\n"
+    "1. Identify the distinct evaluation criteria embedded in the requirement.\n"
+    "2. Score each criterion individually based on evidence in the knowledge base chunks.\n"
+    "3. Produce a weighted composite score.\n"
+    "4. Be explicit about what would raise the score — e.g. 'a CPARS rating specific to this capability would raise this from 7 to 9'.\n"
+    "5. Never round up — if evidence is thin, the score must reflect it.\n"
+    "6. Every strength and weakness point must cite a specific filename in parentheses.\n\n"
+    "Format your response exactly as:\n\n"
+    "COMPOSITE: [score]/10 — [adjectival rating]\n\n"
+    "CRITERIA\n"
+    "• [criterion name] — [sub-score]/10: [evidence summary] ([filename])\n\n"
+    "STRENGTHS\n"
+    "• [specific evidence point] ([filename])\n"
+    "(2–3 points only)\n\n"
+    "WEAKNESSES\n"
+    "• [specific gap or missing element] ([filename or 'not found'])\n"
+    "(2–3 points only)\n\n"
+    "TO IMPROVE\n"
+    "[single highest-leverage action that would most raise the composite score]"
+)
+
 _SYSTEM_ALL = (
     "You are a knowledge base assistant with access to multiple knowledge bases. "
     "Answer the user's question using only the provided context. "
@@ -244,6 +274,44 @@ async def answer_with_history(collection_name: str, history: list[dict], query: 
         return RagResult(answer=answer, sources=_unique_sources(results), collection_name=collection_name, result_count=len(results))
     except Exception as exc:
         log.error("answer_with_history failed for collection %r: %s", collection_name, exc)
+        raise
+
+
+async def score_requirement(collection_name: str, requirement: str) -> RagResult:
+    if not requirement or not requirement.strip():
+        return RagResult(answer="Please provide a requirement.", sources=[], collection_name=collection_name, result_count=0)
+
+    if len(requirement.split()) < 10:
+        return RagResult(
+            answer="Please provide the full requirement text for accurate scoring — short inputs produce unreliable scores.",
+            sources=[],
+            collection_name=collection_name,
+            result_count=0,
+        )
+
+    try:
+        results = await search(collection_name, requirement, top_k=15)
+
+        if not results:
+            return RagResult(
+                answer="No relevant content found in this collection for the given requirement.",
+                sources=[],
+                collection_name=collection_name,
+                result_count=0,
+            )
+
+        context = _build_context(results)
+        user_prompt = f"Knowledge base content:\n{context}\n\nRFP requirement to score:\n{requirement}"
+        answer = await _call_claude(_SYSTEM_SCORE, user_prompt)
+
+        return RagResult(
+            answer=answer,
+            sources=_unique_sources(results),
+            collection_name=collection_name,
+            result_count=len(results),
+        )
+    except Exception as exc:
+        log.error("score_requirement failed for collection %r: %s", collection_name, exc)
         raise
 
 

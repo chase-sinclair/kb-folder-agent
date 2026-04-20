@@ -14,7 +14,7 @@ from agent.orchestrator import (
     get_folder_list,
     infer_collection,
 )
-from agent.rag import answer_query, answer_query_all, answer_with_history, find_gaps, summarize_diff, summarize_recent_changes
+from agent.rag import answer_query, answer_query_all, answer_with_history, find_gaps, score_requirement, summarize_diff, summarize_recent_changes
 from ingestion.quarantine import clear_all_quarantine, clear_quarantine, get_quarantined_files
 from storage.db import init_db
 
@@ -78,7 +78,7 @@ def _parse_command(text: str) -> tuple[str, str, str]:
     subcommand = parts[0].lower()
     rest = parts[1].strip() if len(parts) > 1 else ""
 
-    if subcommand not in {"ask", "clear-quarantine", "changes", "diff", "gaps"}:
+    if subcommand not in {"ask", "clear-quarantine", "changes", "diff", "gaps", "score"}:
         return subcommand, "", rest
 
     # If rest starts with a quote, there's no folder — entire rest is the query
@@ -258,6 +258,46 @@ async def _handle_diff(folder_name: str, filename: str) -> tuple[str, list]:
     return f"🔍 Document Diff — {filename}", blocks
 
 
+async def _handle_score(folder_name: str, requirement: str) -> tuple[str, list]:
+    if not folder_name or not requirement:
+        return _error_blocks('Usage: `/kb score <FolderName> "<RFP requirement>"`')
+
+    collection_name = folder_to_collection_name(folder_name)
+    if not await collection_exists(collection_name):
+        msg = f"No knowledge base found for `{folder_name}`. Use `/kb list` to see available folders."
+        return _error_blocks(msg)
+
+    result = await score_requirement(collection_name, requirement)
+
+    if not result.result_count:
+        return _error_blocks(result.answer)
+
+    # Pull out the COMPOSITE line for prominent display; show the rest as the breakdown
+    composite_line = ""
+    body_lines = []
+    for line in result.answer.splitlines():
+        if line.startswith("COMPOSITE:"):
+            composite_line = line.replace("COMPOSITE:", "").strip()
+        else:
+            body_lines.append(line)
+    body_text = "\n".join(body_lines).strip()
+
+    req_preview = requirement if len(requirement) <= 60 else requirement[:57] + "..."
+    blocks = [
+        _header(f"⭐ Score — {folder_name}"),
+        _divider(),
+        _section(f"*Requirement:* {req_preview}"),
+    ]
+    if composite_line:
+        blocks.append(_section(f"*{composite_line}*"))
+    blocks.append(_divider())
+    blocks.append(_section(clean_for_slack(body_text)))
+    blocks.append(_divider())
+    blocks.append(_context(f"📄 Evaluated against {result.result_count} chunk(s) from {len(result.sources)} source(s)"))
+
+    return f"⭐ Score — {folder_name}", blocks
+
+
 async def _handle_gaps(folder_name: str, topic: str) -> tuple[str, list]:
     if not folder_name or not topic:
         return _error_blocks('Usage: `/kb gaps <FolderName> "<topic>"`')
@@ -290,6 +330,7 @@ def _help_blocks() -> tuple[str, list]:
         "• `/kb changes <FolderName>` — Summarize recent changes\n"
         "• `/kb status` — Watcher status and quarantined files\n"
         "• `/kb diff <FolderName> <filename>` — Summarize changes between last 2 versions\n"
+        "• `/kb score <FolderName> \"<RFP requirement>\"` — Score KB readiness against a requirement (1–10)\n"
         "• `/kb gaps <FolderName> \"<topic>\"` — Gap analysis: what's missing relative to a topic\n"
         "• `/kb clear-quarantine <FolderName> <filename>` — Remove file from quarantine\n"
         "• `/kb clear-quarantine-all` — Clear all quarantined files and re-ingest on restart"
@@ -415,6 +456,8 @@ async def handle_kb(ack, respond, say, command):
             fallback, blocks = await _handle_clear_quarantine(folder, query)
         elif subcommand == "gaps":
             fallback, blocks = await _handle_gaps(folder, query)
+        elif subcommand == "score":
+            fallback, blocks = await _handle_score(folder, query)
         else:
             fallback, blocks = _help_blocks()
     except Exception as exc:
