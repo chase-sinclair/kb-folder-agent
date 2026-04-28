@@ -1,0 +1,155 @@
+test_cases:
+  - id: pp_cloud_001
+    name: DISA cloud migration evidence
+    task_type: question_answering
+    collection: PastPerformance
+    query: What past performance demonstrates Azure Government cloud migration experience with IL4 and IL5 authorization?
+    expected_sources:
+      - 2021_DoD_CloudMigration.md
+    expected_facts:
+      - Azure Government
+      - IL4
+      - IL5
+      - 47 mission-critical DoD applications
+      - zero unplanned downtime
+    required_sections: []
+    unacceptable_claims:
+      - won the current solicitation
+      - FedRAMP High
+    notes: Anchors core single-collection retrieval against the DISA migration write-up.
+
+  - id: qa_all_analytics_001
+    name: Cross-collection analytics and staffing evidence
+    task_type: question_answering_all
+    query: What evidence do we have for federal analytics platforms and who appears qualified to lead the data engineering effort?
+    expected_sources:
+      - 2022_VA_DataAnalytics.md
+      - James_Okafor_DataEngineer.md
+    expected_facts:
+      - 2,400 VA analysts
+      - 4.2TB
+      - AWS GovCloud
+      - James Okafor
+      - ML fraud detection
+    required_sections: []
+    unacceptable_claims:
+      - contract award
+      - guaranteed staffing
+    notes: Tests multi-collection synthesis without blending unsupported evidence.
+
+  - id: score_soc_001
+    name: Score SOC modernization readiness
+    task_type: requirement_scoring
+    collection: PastPerformance
+    query: Describe experience modernizing a federal SOC by consolidating security tools, implementing zero-trust architecture, and obtaining FedRAMP High authorization while reducing detection time.
+    expected_sources:
+      - 2023_DHS_CyberTransformation.md
+    expected_facts:
+      - Splunk Enterprise Security
+      - zero-trust
+      - FedRAMP High
+      - 67%
+      - 7.2 hours
+    required_sections:
+      - COMPOSITE
+      - CRITERIA
+      - STRENGTHS
+      - WEAKNESSES
+      - TO IMPROVE
+    unacceptable_claims:
+      - perfect fit
+      - guaranteed compliance
+    notes: Tests whether scoring stays evidence-based and cites the DHS program.
+
+  - id: draft_fedramp_001
+    name: Draft proposal section with evidence gaps
+    task_type: proposal_drafting
+    collection: PastPerformance
+    query: Describe experience delivering FedRAMP-authorized cybersecurity modernization with 24/7 SOC operations, named CPARS ratings, and zero-trust implementation for a federal customer.
+    expected_sources:
+      - 2023_DHS_CyberTransformation.md
+    expected_facts:
+      - FedRAMP High
+      - zero-trust
+      - cybersecurity modernization
+    required_sections:
+      - "Coverage:"
+    expected_missing_evidence_flags:
+      - CPARS
+      - 24/7 SOC operations
+    unacceptable_claims:
+      - CPARS Exceptional
+      - 24/7 Tier 1-3 analyst coverage
+    notes: Draft should use DHS evidence but flag unsupported CPARS and 24/7 ops claims.
+
+  - id: gaps_data_mod_001
+    name: Gap analysis for data modernization pursuit
+    task_type: gap_analysis
+    collection: TechnicalVolume
+    query: Identify gaps relative to a pursuit requiring Section 508-compliant dashboards, FedRAMP High operations evidence, and named past performance references for data modernization.
+    expected_facts: []
+    required_sections:
+      - Hard Gaps
+      - Soft Gaps
+      - Priority
+    unacceptable_claims:
+      - fully supported
+      - no gaps
+    notes: Whitepaper should support framework discussion but still show pursuit gaps.
+
+  - id: compare_soc_001
+    name: Compare past performance vs technical approach for SOC modernization
+    task_type: collection_compare
+    collection: PastPerformance
+    collection_b: TechnicalVolume
+    query: Compare which collection provides stronger evidence for a federal SOC modernization bid requiring FedRAMP High, zero-trust implementation, and AI-assisted threat detection.
+    expected_sources:
+      - 2023_DHS_CyberTransformation.md
+      - TechnicalApproach_CyberSOC.md
+    expected_facts:
+      - FedRAMP High
+      - zero-trust
+      - AI-assisted threat detection
+    required_sections:
+      - DIRECT ANSWER
+      - Complementary Strengths
+      - Divergences
+      - Bottom Line
+    unacceptable_claims:
+      - identical evidence
+    notes: Forces the compare workflow to distinguish historical evidence from forward-looking solutioning.
+
+  - id: resume_pm_001
+    name: PM resume grounding check
+    task_type: question_answering
+    collection: Resumes
+    query: Which resume best supports a program manager role for a DHS cybersecurity modernization effort with FedRAMP and zero-trust experience?
+    expected_sources:
+      - Sarah_Chen_PM.md
+    expected_facts:
+      - Sarah Chen
+      - Top Secret/SCI
+      - FedRAMP
+      - zero-trust
+      - DHS Cyber Transformation Program
+    required_sections: []
+    unacceptable_claims:
+      - James Okafor led the DHS cyber transformation program
+      - active PMP for both candidates
+    notes: Confirms resume retrieval and basic attribution discipline.
+
+  - id: not_found_award_001
+    name: Unsupported award outcome question
+    task_type: not_found
+    collection: Contracts
+    query: Did we win Solicitation HQ-2024-SOC-0041, what was the final award value, and when did performance start?
+    expected_sources: []
+    expected_facts: []
+    required_sections: []
+    unacceptable_claims:
+      - won
+      - awarded
+      - performance started
+      - $
+    expected_not_found: true
+    notes: The KB includes pricing strategy and technical approach, but not an award outcome.

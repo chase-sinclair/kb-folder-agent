@@ -1,0 +1,77 @@
+{
+  "run_timestamp": "2026-04-28 22:22 UTC",
+  "judge_enabled": false,
+  "total_cases": 1,
+  "passed": 0,
+  "warnings": 0,
+  "failed": 1,
+  "overall_score": 0.0,
+  "retrieval_quality": 0.0,
+  "expected_fact_coverage": 0.0,
+  "format_compliance": 0.0,
+  "citation_presence": 0.0,
+  "hallucination_risk": "Unknown",
+  "scores_by_task_type": {
+    "question_answering": 0.0
+  },
+  "case_results": [
+    {
+      "id": "qa_example_001",
+      "name": "Cloud modernization evidence",
+      "task_type": "question_answering",
+      "collection": "SampleCollection",
+      "query": "What past performance supports cloud migration and data platform modernization?",
+      "status": "FAIL",
+      "overall_score": 0.0,
+      "deterministic_scores": {
+        "expected_source_hit_rate": 0.0,
+        "expected_fact_coverage": 0.0,
+        "required_section_compliance": null,
+        "missing_evidence_flag_compliance": null,
+        "citation_presence": 0.0,
+        "not_found_handling": null,
+        "matched_expected_sources": [],
+        "missing_expected_sources": [
+          "Sample_Cloud_Modernization.docx",
+          "Sample_Data_Platform.docx"
+        ],
+        "matched_expected_facts": [],
+        "missing_expected_facts": [
+          "cloud",
+          "data platform",
+          "modernization"
+        ],
+        "matched_required_sections": [],
+        "missing_required_sections": [],
+        "matched_missing_evidence_flags": [],
+        "missing_expected_missing_evidence_flags": [],
+        "unacceptable_claims_present": [],
+        "citation_present": false,
+        "not_found_detected": false
+      },
+      "judge_scores": null,
+      "retrieved_sources": [],
+      "retrieved_items": [],
+      "answer": "Collection `SampleCollection` does not exist.",
+      "warnings": [
+        "Missing expected sources: Sample_Cloud_Modernization.docx, Sample_Data_Platform.docx",
+        "Missing expected facts: cloud, data platform, modernization"
+      ],
+      "failures": [
+        "Collection `SampleCollection` does not exist."
+      ],
+      "recommendations": [
+        "Improve retrieval so expected source files appear in the top results.",
+        "Tighten prompting so the answer explicitly covers the expected facts."
+      ],
+      "task_metadata": {
+        "error": "Collection `SampleCollection` does not exist."
+      }
+    }
+  ],
+  "recommendations": [
+    "Review retrieval settings or top_k where expected source hit rate is low."
+  ],
+  "output_markdown": "C:\\Users\\chase\\Documents\\kb-folder-agent\\evals\\reports\\eval_report_20260428_222214.md",
+  "output_json": "C:\\Users\\chase\\Documents\\kb-folder-agent\\evals\\results\\eval_results_20260428_222214.json"
+}

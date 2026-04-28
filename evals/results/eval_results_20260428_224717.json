@@ -1,0 +1,231 @@
+{
+  "run_timestamp": "2026-04-28 22:47 UTC",
+  "judge_enabled": false,
+  "total_cases": 1,
+  "passed": 1,
+  "warnings": 0,
+  "failed": 0,
+  "overall_score": 1.0,
+  "retrieval_quality": 0.0,
+  "expected_fact_coverage": 0.0,
+  "format_compliance": 1.0,
+  "citation_presence": 0.0,
+  "hallucination_risk": "Unknown",
+  "scores_by_task_type": {
+    "gap_analysis": 1.0
+  },
+  "case_results": [
+    {
+      "id": "gaps_data_mod_001",
+      "name": "Gap analysis for data modernization pursuit",
+      "task_type": "gap_analysis",
+      "collection": "TechnicalVolume",
+      "query": "Identify gaps relative to a pursuit requiring Section 508-compliant dashboards, FedRAMP High operations evidence, and named past performance references for data modernization.",
+      "status": "PASS",
+      "overall_score": 1.0,
+      "deterministic_scores": {
+        "expected_source_hit_rate": null,
+        "expected_fact_coverage": null,
+        "required_section_compliance": 1.0,
+        "missing_evidence_flag_compliance": null,
+        "citation_presence": null,
+        "not_found_handling": null,
+        "matched_expected_sources": [],
+        "missing_expected_sources": [],
+        "matched_expected_facts": [],
+        "missing_expected_facts": [],
+        "matched_required_sections": [
+          "Hard Gaps",
+          "Soft Gaps",
+          "Priority"
+        ],
+        "missing_required_sections": [],
+        "matched_missing_evidence_flags": [],
+        "missing_expected_missing_evidence_flags": [],
+        "unacceptable_claims_present": [],
+        "citation_present": false,
+        "not_found_detected": false
+      },
+      "judge_scores": null,
+      "retrieved_sources": [
+        "DataModernization_WhitePaper.md",
+        "TechnicalApproach_CyberSOC.md"
+      ],
+      "retrieved_items": [
+        {
+          "collection_name": "technicalvolume",
+          "source_filename": "DataModernization_WhitePaper.md",
+          "file_path": "ConsultingKB/TechnicalVolume/DataModernization_WhitePaper.md",
+          "score": 0.57871497,
+          "content": "## Abstract\nFederal agencies face mounting pressure to modernize aging data infrastructure while maintaining compliance with FISMA, Privacy Act, and Section 508. This whitepaper documents our proven 5-phase Data Modernization Framework, validated across 11 federal engagements totaling $127M in contract value.\n\n## Phase 1: Discovery & Inventory (Weeks 1\u20134)\nAutomated scanning of all data stores using our proprietary DataMapper tool. Output: enterprise data catalog with sensitivity classifications, lineage maps, and quality scores. Average discovery: 3,400 tables, 280 data owners identified.",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 1
+          }
+        },
+        {
+          "collection_name": "technicalvolume",
+          "source_filename": "DataModernization_WhitePaper.md",
+          "file_path": "ConsultingKB/TechnicalVolume/DataModernization_WhitePaper.md",
+          "score": 0.57871497,
+          "content": "## Abstract\nFederal agencies face mounting pressure to modernize aging data infrastructure while maintaining compliance with FISMA, Privacy Act, and Section 508. This whitepaper documents our proven 5-phase Data Modernization Framework, validated across 11 federal engagements totaling $127M in contract value.\n\n## Phase 1: Discovery & Inventory (Weeks 1\u20134)\nAutomated scanning of all data stores using our proprietary DataMapper tool. Output: enterprise data catalog with sensitivity classifications, lineage maps, and quality scores. Average discovery: 3,400 tables, 280 data owners identified.",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 1
+          }
+        },
+        {
+          "collection_name": "technicalvolume",
+          "source_filename": "DataModernization_WhitePaper.md",
+          "file_path": "ConsultingKB/TechnicalVolume/DataModernization_WhitePaper.md",
+          "score": 0.5368398,
+          "content": "# Data Modernization Whitepaper: Federal Agency Playbook\n\n**Authors:** Analytics Practice, Strategy & Innovation Group\n**Version:** 2.1 | February 2024",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 0
+          }
+        },
+        {
+          "collection_name": "technicalvolume",
+          "source_filename": "DataModernization_WhitePaper.md",
+          "file_path": "ConsultingKB/TechnicalVolume/DataModernization_WhitePaper.md",
+          "score": 0.5368398,
+          "content": "# Data Modernization Whitepaper: Federal Agency Playbook\n\n**Authors:** Analytics Practice, Strategy & Innovation Group\n**Version:** 2.1 | February 2024",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 0
+          }
+        },
+        {
+          "collection_name": "technicalvolume",
+          "source_filename": "DataModernization_WhitePaper.md",
+          "file_path": "ConsultingKB/TechnicalVolume/DataModernization_WhitePaper.md",
+          "score": 0.52517927,
+          "content": "## Phase 2: Architecture Blueprint (Weeks 5\u20138)\nDesign target-state architecture. For most agencies we recommend:\n- **Medallion architecture** on cloud (Bronze/Silver/Gold layers) for structured data\n- **Data mesh** governance model assigning domain ownership to business units\n- **Unified catalog** (AWS Glue or Purview) as single source of metadata truth\n\n## Phase 3: Pilot Migration (Weeks 9\u201316)\nMigrate highest-value, lowest-risk dataset first. Validate transformation logic, data quality rules, and access controls. Pilot success criteria: <0.01% error rate, stakeholder sign-off on 3 sample reports.",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 2
+          }
+        },
+        {
+          "collection_name": "technicalvolume",
+          "source_filename": "DataModernization_WhitePaper.md",
+          "file_path": "ConsultingKB/TechnicalVolume/DataModernization_WhitePaper.md",
+          "score": 0.52517927,
+          "content": "## Phase 2: Architecture Blueprint (Weeks 5\u20138)\nDesign target-state architecture. For most agencies we recommend:\n- **Medallion architecture** on cloud (Bronze/Silver/Gold layers) for structured data\n- **Data mesh** governance model assigning domain ownership to business units\n- **Unified catalog** (AWS Glue or Purview) as single source of metadata truth\n\n## Phase 3: Pilot Migration (Weeks 9\u201316)\nMigrate highest-value, lowest-risk dataset first. Validate transformation logic, data quality rules, and access controls. Pilot success criteria: <0.01% error rate, stakeholder sign-off on 3 sample reports.",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 2
+          }
+        },
+        {
+          "collection_name": "technicalvolume",
+          "source_filename": "TechnicalApproach_CyberSOC.md",
+          "file_path": "ConsultingKB/TechnicalVolume/TechnicalApproach_CyberSOC.md",
+          "score": 0.4947663,
+          "content": "## 3. Staffing\n- 1 Program Manager (onsite, 100%)\n- 2 Senior Splunk Architects (onsite, 100%)\n- 4 SOC Analysts Tier 1/2 (onsite, 100%, rotating shifts)\n- 1 Threat Intelligence Analyst (remote, 100%)\n- 1 Data Scientist \u2013 UEBA (remote, 50%)\n\n## 4. Risk Mitigation\n| Risk | Probability | Impact | Mitigation |\n|------|-------------|--------|------------|\n| Log source ingestion delays | Medium | High | Pre-engagement discovery call; parser library of 340+ connectors |\n| Analyst training resistance | Low | Medium | Gamified training portal; champion program with incentive badges |\n| FedRAMP timeline slip | Medium | High | Leverage existing FedRAMP package; only delta controls needed |",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 4
+          }
+        },
+        {
+          "collection_name": "technicalvolume",
+          "source_filename": "TechnicalApproach_CyberSOC.md",
+          "file_path": "ConsultingKB/TechnicalVolume/TechnicalApproach_CyberSOC.md",
+          "score": 0.47568053,
+          "content": "# Technical Approach \u2014 Cyber SOC Modernization RFP\n\n**Solicitation:** HQ-2024-SOC-0041\n**Prepared by:** Solutions Architecture Team\n**Date:** March 2024",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 0
+          }
+        },
+        {
+          "collection_name": "technicalvolume",
+          "source_filename": "TechnicalApproach_CyberSOC.md",
+          "file_path": "ConsultingKB/TechnicalVolume/TechnicalApproach_CyberSOC.md",
+          "score": 0.46938798,
+          "content": "### 2.2 AI/ML Threat Detection\n- Behavioral baselines for all 8,400 user accounts using UEBA models trained on 90-day activity window\n- Anomaly detection triggering on >3\u03c3 deviation from individual user baseline\n- Custom NLP model classifying phishing emails with 96.3% accuracy (validated on 18-month DHS corpus)\n\n### 2.3 Migration Plan\nPhase 1 (Months 1\u20133): Deploy Splunk ES in parallel; begin log source onboarding\nPhase 2 (Months 4\u20136): Migrate all 9 legacy tools; validate data parity\nPhase 3 (Months 7\u20139): Enable SOAR playbooks; conduct analyst training\nPhase 4 (Month 10+): Full operations; legacy tool decommission",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 3
+          }
+        },
+        {
+          "collection_name": "technicalvolume",
+          "source_filename": "DataModernization_WhitePaper.md",
+          "file_path": "ConsultingKB/TechnicalVolume/DataModernization_WhitePaper.md",
+          "score": 0.46504524,
+          "content": "## Key Metrics from Past Engagements\n- Average data quality improvement: 34% reduction in null/anomalous values\n- Average query performance improvement: 8\u00d7 faster on analytical workloads\n- Average storage cost reduction: 41% through compression and tiering",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 4
+          }
+        },
+        {
+          "collection_name": "technicalvolume",
+          "source_filename": "DataModernization_WhitePaper.md",
+          "file_path": "ConsultingKB/TechnicalVolume/DataModernization_WhitePaper.md",
+          "score": 0.46504524,
+          "content": "## Key Metrics from Past Engagements\n- Average data quality improvement: 34% reduction in null/anomalous values\n- Average query performance improvement: 8\u00d7 faster on analytical workloads\n- Average storage cost reduction: 41% through compression and tiering",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 4
+          }
+        },
+        {
+          "collection_name": "technicalvolume",
+          "source_filename": "TechnicalApproach_CyberSOC.md",
+          "file_path": "ConsultingKB/TechnicalVolume/TechnicalApproach_CyberSOC.md",
+          "score": 0.4496228,
+          "content": "## 1. Understanding of the Requirement\nThe Government seeks to modernize its Security Operations Center (SOC) by consolidating 9 disparate security tools into a unified platform, achieving 24/7 Tier 1\u20133 analyst coverage, and implementing AI-assisted threat detection to reduce analyst fatigue.\n\n## 2. Technical Solution",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 1
+          }
+        },
+        {
+          "collection_name": "technicalvolume",
+          "source_filename": "DataModernization_WhitePaper.md",
+          "file_path": "ConsultingKB/TechnicalVolume/DataModernization_WhitePaper.md",
+          "score": 0.39819145,
+          "content": "## Phase 4: Scaled Migration (Months 4\u201312)\nParallel migration tracks (max 3 concurrent). Each track: extract \u2192 transform \u2192 load \u2192 validate \u2192 cut over. Average migration velocity: 180 tables/month.\n\n## Phase 5: Operate & Optimize (Ongoing)\nDataOps team monitors pipeline health, query performance, and cost. SLA: 99.9% pipeline availability; <4hr P1 incident response.",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 3
+          }
+        },
+        {
+          "collection_name": "technicalvolume",
+          "source_filename": "DataModernization_WhitePaper.md",
+          "file_path": "ConsultingKB/TechnicalVolume/DataModernization_WhitePaper.md",
+          "score": 0.39819145,
+          "content": "## Phase 4: Scaled Migration (Months 4\u201312)\nParallel migration tracks (max 3 concurrent). Each track: extract \u2192 transform \u2192 load \u2192 validate \u2192 cut over. Average migration velocity: 180 tables/month.\n\n## Phase 5: Operate & Optimize (Ongoing)\nDataOps team monitors pipeline health, query performance, and cost. SLA: 99.9% pipeline availability; <4hr P1 incident response.",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 3
+          }
+        },
+        {
+          "collection_name": "technicalvolume",
+          "source_filename": "TechnicalApproach_CyberSOC.md",
+          "file_path": "ConsultingKB/TechnicalVolume/TechnicalApproach_CyberSOC.md",
+          "score": 0.38206887,
+          "content": "### 2.1 Platform Architecture\nWe propose a three-tier SOC architecture:\n- **Tier 1 \u2013 Automated Triage**: Splunk SOAR playbooks auto-triage and close ~60% of Level 1 alerts without analyst intervention\n- **Tier 2 \u2013 Analyst Workbench**: Unified analyst console with risk-scored alert queue, integrated threat intel feeds (FS-ISAC, CISA KEV, Mandiant Advantage)\n- **Tier 3 \u2013 Threat Hunting**: Dedicated hunt team using Jupyter notebooks connected to Splunk raw data lake; 40 hours/week proactive hunting",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 2
+          }
+        }
+      ],
+      "answer": "**Hard Gaps**\n\u2022 No named past performance references: The content cites \"11 federal engagements totaling $127M\" but provides zero specific contract names, agency names, contract numbers, or COR/CO quotes. A past performance volume with 3-5 named contracts including agency, period of performance, and reference contact information would fill this.\n\u2022 No FedRAMP High operations evidence: FedRAMP is mentioned only as a risk mitigation item (\"leverage existing FedRAMP package\") with no documentation of current authorization status, authorization date, sponsoring agency, or continuous monitoring evidence. A FedRAMP High authorization letter and ConMon summary would fill this.\n\u2022 No Section 508 compliance implementation details: Section 508 is mentioned once in passing (\"compliance with FISMA, Privacy Act, and Section 508\") with zero evidence of 508-compliant dashboard development, VPAT documentation, accessibility testing processes, or assistive technology compatibility. A VPAT for proposed dashboard tools and documented 508 testing methodology would fill this.\n\n**Soft Gaps**\n\u2022 No COR/CO quotes or testimonials: Metrics are provided (34% data quality improvement, 8\u00d7 query performance) but no direct customer validation or quotes attributing outcomes to the contractor's work. Documented customer feedback or award fee evaluations would fill this.\n\u2022 Data modernization staffing model absent: The Cyber SOC document includes detailed staffing (roles, percentages, onsite/remote) but no equivalent staffing plan exists for data modernization engagements. A labor category matrix with FTE allocations by phase would fill this.\n\u2022 No specific agency names in past performance metrics: Metrics like \"3,400 tables\" and \"280 data owners\" are presented as averages without tying outcomes to identifiable contracts that could serve as references. Contract-specific performance narratives would fill this.\n\u2022 Dashboard/visualization capability undocumented: No mention of BI tools, dashboard development experience, or visualization deliverables despite the pursuit requiring 508-compliant dashboards. Portfolio samples or tool certifications (Tableau, Power BI) would fill this.\n\n**Priority**\nAddress the complete absence of named past performance references first\u2014without specific contract names and COR contacts, the proposal cannot satisfy past performance evaluation criteria regardless of technical merit.",
+      "warnings": [],
+      "failures": [],
+      "recommendations": [],
+      "task_metadata": {}
+    }
+  ],
+  "recommendations": [],
+  "output_markdown": "C:\\Users\\chase\\Documents\\kb-folder-agent\\evals\\reports\\eval_report_20260428_224717.md",
+  "output_json": "C:\\Users\\chase\\Documents\\kb-folder-agent\\evals\\results\\eval_results_20260428_224717.json"
+}

@@ -160,6 +160,8 @@ class RagResult:
     sources: list[str]
     collection_name: str
     result_count: int
+    retrieved_items: list[dict] | None = None
+    task_metadata: dict | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -181,6 +183,24 @@ def _unique_sources(results: list[dict]) -> list[str]:
         if name and name not in seen:
             seen.append(name)
     return seen
+
+
+def _serialize_results(results: list[dict], collection_name: str | None = None) -> list[dict]:
+    items = []
+    for result in results:
+        filename = Path(result.get("file_path", "")).name
+        items.append(
+            {
+                "collection_name": collection_name,
+                "source_filename": filename,
+                "file_path": result.get("file_path", ""),
+                "score": result.get("score"),
+                "content": result.get("content", ""),
+                "chunk_type": result.get("chunk_type", "text"),
+                "metadata": result.get("metadata", {}),
+            }
+        )
+    return items
 
 
 async def _call_claude(system: str, user: str) -> str:
@@ -208,6 +228,7 @@ async def answer_query(collection_name: str, query: str) -> RagResult:
             sources=[],
             collection_name=collection_name,
             result_count=0,
+            retrieved_items=[],
         )
     try:
         results = await search(collection_name, query, top_k=TOP_K)
@@ -218,6 +239,7 @@ async def answer_query(collection_name: str, query: str) -> RagResult:
                 sources=[],
                 collection_name=collection_name,
                 result_count=0,
+                retrieved_items=[],
             )
 
         context = _build_context(results)
@@ -229,6 +251,7 @@ async def answer_query(collection_name: str, query: str) -> RagResult:
             sources=_unique_sources(results),
             collection_name=collection_name,
             result_count=len(results),
+            retrieved_items=_serialize_results(results, collection_name),
         )
     except Exception as exc:
         log.error("answer_query failed for collection %r: %s", collection_name, exc)
@@ -237,11 +260,21 @@ async def answer_query(collection_name: str, query: str) -> RagResult:
 
 async def answer_query_all(query: str) -> dict:
     if not query or not query.strip():
-        return {"answer": "Please provide a question.", "sources_by_collection": {}, "total_result_count": 0}
+        return {
+            "answer": "Please provide a question.",
+            "sources_by_collection": {},
+            "retrieved_items_by_collection": {},
+            "total_result_count": 0,
+        }
     try:
         results_by_collection = await search_all_collections(query)
         if not results_by_collection:
-            return {"answer": "No relevant content found across any knowledge base.", "sources_by_collection": {}, "total_result_count": 0}
+            return {
+                "answer": "No relevant content found across any knowledge base.",
+                "sources_by_collection": {},
+                "retrieved_items_by_collection": {},
+                "total_result_count": 0,
+            }
 
         context_parts = []
         for col_name, results in results_by_collection.items():
@@ -254,8 +287,16 @@ async def answer_query_all(query: str) -> dict:
         answer = await _call_claude(_SYSTEM_ALL, user_prompt)
 
         sources_by_collection = {col: _unique_sources(res) for col, res in results_by_collection.items()}
+        retrieved_items_by_collection = {
+            col: _serialize_results(res, col) for col, res in results_by_collection.items()
+        }
         total = sum(len(r) for r in results_by_collection.values())
-        return {"answer": answer, "sources_by_collection": sources_by_collection, "total_result_count": total}
+        return {
+            "answer": answer,
+            "sources_by_collection": sources_by_collection,
+            "retrieved_items_by_collection": retrieved_items_by_collection,
+            "total_result_count": total,
+        }
     except Exception as exc:
         log.error("answer_query_all failed: %s", exc)
         raise
@@ -306,7 +347,13 @@ async def summarize_diff(file_path: str) -> dict:
 
 async def answer_with_history(collection_name: str, history: list[dict], query: str) -> RagResult:
     if not query or not query.strip():
-        return RagResult(answer="Please provide a question.", sources=[], collection_name=collection_name, result_count=0)
+        return RagResult(
+            answer="Please provide a question.",
+            sources=[],
+            collection_name=collection_name,
+            result_count=0,
+            retrieved_items=[],
+        )
     try:
         results = await search(collection_name, query, top_k=TOP_K)
         context = _build_context(results) if results else "No relevant content found."
@@ -318,7 +365,13 @@ async def answer_with_history(collection_name: str, history: list[dict], query: 
             messages=messages,
         )
         answer = response.content[0].text
-        return RagResult(answer=answer, sources=_unique_sources(results), collection_name=collection_name, result_count=len(results))
+        return RagResult(
+            answer=answer,
+            sources=_unique_sources(results),
+            collection_name=collection_name,
+            result_count=len(results),
+            retrieved_items=_serialize_results(results, collection_name),
+        )
     except Exception as exc:
         log.error("answer_with_history failed for collection %r: %s", collection_name, exc)
         raise
@@ -362,6 +415,7 @@ async def draft_section(collection_name: str, requirement: str) -> RagResult:
             sources=_unique_sources(results),
             collection_name=collection_name,
             result_count=len(results),
+            retrieved_items=_serialize_results(results, collection_name),
         )
     except Exception as exc:
         log.error("draft_section failed for collection %r: %s", collection_name, exc)
@@ -416,6 +470,8 @@ async def compare_collections(
             "result_count_a": len(results_a),
             "result_count_b": len(results_b),
             "overlap_files": overlap_files,
+            "retrieved_items_a": _serialize_results(results_a, collection_name_a),
+            "retrieved_items_b": _serialize_results(results_b, collection_name_b),
         }
     except Exception as exc:
         log.error("compare_collections failed (%r vs %r): %s", collection_name_a, collection_name_b, exc)
@@ -454,6 +510,7 @@ async def score_requirement(collection_name: str, requirement: str) -> RagResult
             sources=_unique_sources(results),
             collection_name=collection_name,
             result_count=len(results),
+            retrieved_items=_serialize_results(results, collection_name),
         )
     except Exception as exc:
         log.error("score_requirement failed for collection %r: %s", collection_name, exc)
@@ -483,6 +540,7 @@ async def find_gaps(collection_name: str, topic: str) -> RagResult:
             sources=_unique_sources(results),
             collection_name=collection_name,
             result_count=len(results),
+            retrieved_items=_serialize_results(results, collection_name),
         )
     except Exception as exc:
         log.error("find_gaps failed for collection %r: %s", collection_name, exc)
@@ -511,7 +569,127 @@ async def summarize_recent_changes(collection_name: str, days: int = 3) -> RagRe
             sources=_unique_sources(results),
             collection_name=collection_name,
             result_count=len(results),
+            retrieved_items=_serialize_results(results, collection_name),
         )
     except Exception as exc:
         log.error("summarize_recent_changes failed for collection %r: %s", collection_name, exc)
         raise
+
+
+async def answer_query_eval(collection_name: str, query: str) -> dict:
+    result = await answer_query(collection_name, query)
+    return {
+        "answer": result.answer,
+        "retrieved_sources": result.sources,
+        "collection_name": result.collection_name,
+        "result_count": result.result_count,
+        "retrieved_items": result.retrieved_items or [],
+        "task_metadata": result.task_metadata or {},
+    }
+
+
+async def answer_query_all_eval(query: str) -> dict:
+    result = await answer_query_all(query)
+    sources_by_collection = result.get("sources_by_collection", {})
+    retrieved_items_by_collection = result.get("retrieved_items_by_collection", {})
+    flat_sources: list[str] = []
+    flat_items: list[dict] = []
+
+    for collection_name, sources in sources_by_collection.items():
+        for source in sources:
+            if source not in flat_sources:
+                flat_sources.append(source)
+        flat_items.extend(retrieved_items_by_collection.get(collection_name, []))
+
+    return {
+        "answer": result["answer"],
+        "retrieved_sources": flat_sources,
+        "result_count": result["total_result_count"],
+        "retrieved_items": flat_items,
+        "task_metadata": {"sources_by_collection": sources_by_collection},
+    }
+
+
+async def score_requirement_eval(collection_name: str, requirement: str) -> dict:
+    result = await score_requirement(collection_name, requirement)
+    return {
+        "answer": result.answer,
+        "retrieved_sources": result.sources,
+        "collection_name": result.collection_name,
+        "result_count": result.result_count,
+        "retrieved_items": result.retrieved_items or [],
+        "task_metadata": result.task_metadata or {},
+    }
+
+
+async def draft_section_eval(collection_name: str, requirement: str) -> dict:
+    result = await draft_section(collection_name, requirement)
+    return {
+        "answer": result.answer,
+        "retrieved_sources": result.sources,
+        "collection_name": result.collection_name,
+        "result_count": result.result_count,
+        "retrieved_items": result.retrieved_items or [],
+        "task_metadata": result.task_metadata or {},
+    }
+
+
+async def find_gaps_eval(collection_name: str, topic: str) -> dict:
+    result = await find_gaps(collection_name, topic)
+    return {
+        "answer": result.answer,
+        "retrieved_sources": result.sources,
+        "collection_name": result.collection_name,
+        "result_count": result.result_count,
+        "retrieved_items": result.retrieved_items or [],
+        "task_metadata": result.task_metadata or {},
+    }
+
+
+async def summarize_recent_changes_eval(collection_name: str, days: int = 3) -> dict:
+    result = await summarize_recent_changes(collection_name, days=days)
+    return {
+        "answer": result.answer,
+        "retrieved_sources": result.sources,
+        "collection_name": result.collection_name,
+        "result_count": result.result_count,
+        "retrieved_items": result.retrieved_items or [],
+        "task_metadata": {"days": days, **(result.task_metadata or {})},
+    }
+
+
+async def compare_collections_eval(
+    collection_name_a: str,
+    collection_name_b: str,
+    folder_a: str,
+    folder_b: str,
+    question: str,
+) -> dict:
+    result = await compare_collections(collection_name_a, collection_name_b, folder_a, folder_b, question)
+    if "error" in result:
+        return {
+            "answer": result["error"],
+            "retrieved_sources": [],
+            "result_count": 0,
+            "retrieved_items": [],
+            "task_metadata": {"error": result["error"]},
+        }
+
+    retrieved_sources = []
+    for source in result.get("sources_a", []) + result.get("sources_b", []):
+        if source not in retrieved_sources:
+            retrieved_sources.append(source)
+
+    return {
+        "answer": result["answer"],
+        "retrieved_sources": retrieved_sources,
+        "result_count": result.get("result_count_a", 0) + result.get("result_count_b", 0),
+        "retrieved_items": result.get("retrieved_items_a", []) + result.get("retrieved_items_b", []),
+        "task_metadata": {
+            "sources_a": result.get("sources_a", []),
+            "sources_b": result.get("sources_b", []),
+            "overlap_files": result.get("overlap_files", []),
+            "collection_a": collection_name_a,
+            "collection_b": collection_name_b,
+        },
+    }

@@ -1,0 +1,125 @@
+{
+  "run_timestamp": "2026-04-28 22:38 UTC",
+  "judge_enabled": false,
+  "total_cases": 1,
+  "passed": 1,
+  "warnings": 0,
+  "failed": 0,
+  "overall_score": 1.0,
+  "retrieval_quality": 1.0,
+  "expected_fact_coverage": 1.0,
+  "format_compliance": 0.0,
+  "citation_presence": 1.0,
+  "hallucination_risk": "Unknown",
+  "scores_by_task_type": {
+    "question_answering": 1.0
+  },
+  "case_results": [
+    {
+      "id": "pp_cloud_001",
+      "name": "DISA cloud migration evidence",
+      "task_type": "question_answering",
+      "collection": "PastPerformance",
+      "query": "What past performance demonstrates Azure Government cloud migration experience with IL4 and IL5 authorization?",
+      "status": "PASS",
+      "overall_score": 1.0,
+      "deterministic_scores": {
+        "expected_source_hit_rate": 1.0,
+        "expected_fact_coverage": 1.0,
+        "required_section_compliance": null,
+        "missing_evidence_flag_compliance": null,
+        "citation_presence": 1.0,
+        "not_found_handling": null,
+        "matched_expected_sources": [
+          "2021_DoD_CloudMigration.md"
+        ],
+        "missing_expected_sources": [],
+        "matched_expected_facts": [
+          "Azure Government",
+          "IL4",
+          "IL5",
+          "47 mission-critical DoD applications",
+          "zero unplanned downtime"
+        ],
+        "missing_expected_facts": [],
+        "matched_required_sections": [],
+        "missing_required_sections": [],
+        "matched_missing_evidence_flags": [],
+        "missing_expected_missing_evidence_flags": [],
+        "unacceptable_claims_present": [],
+        "citation_present": true,
+        "not_found_detected": false
+      },
+      "judge_scores": null,
+      "retrieved_sources": [
+        "2021_DoD_CloudMigration.md",
+        "2022_VA_DataAnalytics.md"
+      ],
+      "retrieved_items": [
+        {
+          "collection_name": "pastperformance",
+          "source_filename": "2021_DoD_CloudMigration.md",
+          "file_path": "ConsultingKB/PastPerformance/2021_DoD_CloudMigration.md",
+          "score": 0.698678,
+          "content": "## Executive Summary\nMigrated 47 mission-critical DoD applications from on-premises DISA data centers to Azure Government cloud, achieving IL4 and IL5 authorization for 12 of those applications. Delivered with zero unplanned downtime during migration windows.\n\n## Key Accomplishments\n- Completed all 47 app migrations on schedule (24-month program)\n- Achieved $2.1M annualized infrastructure cost savings post-migration\n- All 12 IL4/IL5 apps authorized within 6 months of migration\n- Developed reusable DevSecOps pipeline templates now used by 3 other DISA programs",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 1
+          }
+        },
+        {
+          "collection_name": "pastperformance",
+          "source_filename": "2021_DoD_CloudMigration.md",
+          "file_path": "ConsultingKB/PastPerformance/2021_DoD_CloudMigration.md",
+          "score": 0.5414472,
+          "content": "# DoD DISA Cloud Migration \u2014 Past Performance\n\n**Client:** Defense Information Systems Agency (DISA)\n**Contract Number:** HC1047-20-F-0082\n**Period of Performance:** January 2021 \u2013 December 2022\n**Contract Value:** $7.6M (FFP)\n**Program Manager:** Lt. Col. (Ret.) Brian Torres, PMP",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 0
+          }
+        },
+        {
+          "collection_name": "pastperformance",
+          "source_filename": "2022_VA_DataAnalytics.md",
+          "file_path": "ConsultingKB/PastPerformance/2022_VA_DataAnalytics.md",
+          "score": 0.49126518,
+          "content": "## Executive Summary\nArchitected and built a cloud-native analytics platform on AWS GovCloud supporting 2,400 VA analysts. Platform ingests 4.2TB of veteran health and benefits data daily, enabling near-real-time dashboards for benefits processing, hospital capacity, and claims fraud detection.\n\n## Key Accomplishments\n- Reduced benefits processing report generation time from 3 days to 4 hours\n- Built ML fraud detection model achieving 91% precision on claims anomalies \u2014 flagged $14M in potentially fraudulent claims in first 6 months\n- Maintained 99.94% platform uptime across 18 months of operation\n- Delivered ATO within 8 months using continuous Authorization to Operate (cATO) approach",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 1
+          }
+        },
+        {
+          "collection_name": "pastperformance",
+          "source_filename": "2022_VA_DataAnalytics.md",
+          "file_path": "ConsultingKB/PastPerformance/2022_VA_DataAnalytics.md",
+          "score": 0.46054935,
+          "content": "## Technologies Used\nAWS GovCloud (S3, Redshift, SageMaker, Lake Formation), Tableau, dbt, Apache Airflow, Python, Terraform\n\n## COR Reference\nDr. Priya Nair | priya.nair@va.gov | (202) 555-0291\n\"Exceptional technical depth and a true partner. Their ML fraud model alone justified the entire contract value.\"",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 2
+          }
+        },
+        {
+          "collection_name": "pastperformance",
+          "source_filename": "2022_VA_DataAnalytics.md",
+          "file_path": "ConsultingKB/PastPerformance/2022_VA_DataAnalytics.md",
+          "score": 0.4580323,
+          "content": "# VA Enterprise Data Analytics Platform \u2014 Past Performance\n\n**Client:** Department of Veterans Affairs, Office of Data Governance\n**Contract Number:** VA118-21-D-0055 / Task Order 0003\n**Period of Performance:** July 2022 \u2013 Present (Option Year 2 active)\n**Contract Value:** $31.2M IDIQ; $9.8M task order\n**Program Manager:** James Okafor, PMP, CISSP",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 0
+          }
+        }
+      ],
+      "answer": "The DoD DISA Cloud Migration project (Contract HC1047-20-F-0082) demonstrates Azure Government cloud migration experience with IL4 and IL5 authorization. According to 2021_DoD_CloudMigration.md, this $7.6M firm-fixed-price contract ran from January 2021 through December 2022 and involved migrating 47 mission-critical DoD applications from on-premises DISA data centers to Azure Government cloud. Of those 47 applications, 12 achieved IL4 and IL5 authorization within 6 months of migration. The project was completed on schedule over the 24-month program with zero unplanned downtime during migration windows, delivered $2.1M in annualized infrastructure cost savings, and produced reusable DevSecOps pipeline templates that are now used by 3 other DISA programs. The Program Manager was Lt. Col. (Ret.) Brian Torres, PMP.",
+      "warnings": [],
+      "failures": [],
+      "recommendations": [],
+      "task_metadata": {}
+    }
+  ],
+  "recommendations": [],
+  "output_markdown": "C:\\Users\\chase\\Documents\\kb-folder-agent\\evals\\reports\\eval_report_20260428_223824.md",
+  "output_json": "C:\\Users\\chase\\Documents\\kb-folder-agent\\evals\\results\\eval_results_20260428_223824.json"
+}

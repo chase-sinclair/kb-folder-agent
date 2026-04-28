@@ -82,7 +82,12 @@ async def search_all_collections(query: str, top_k_per_collection: int = 3) -> d
     for col in collections:
         name = col["name"]
         try:
-            hits = await query_collection(collection_name=name, query_vector=vector, top_k=top_k_per_collection)
+            hits = await query_collection(
+                collection_name=name,
+                query_vector=vector,
+                top_k=top_k_per_collection,
+                query_text=query,
+            )
             if hits:
                 results[name] = hits
                 log.info("search_all_collections: %d results from %r", len(hits), name)
@@ -128,4 +133,4 @@ async def infer_collection(query: str) -> dict:
 
 
 def folder_to_collection_name(folder_name: str) -> str:
-    return re.sub(r"[ \-]+", "_", folder_name).lower()
+    return re.sub(r"[^a-z0-9]+", "_", folder_name.lower()).strip("_")

@@ -1,0 +1,117 @@
+{
+  "run_timestamp": "2026-04-28 22:47 UTC",
+  "judge_enabled": false,
+  "total_cases": 1,
+  "passed": 1,
+  "warnings": 0,
+  "failed": 0,
+  "overall_score": 1.0,
+  "retrieval_quality": 0.0,
+  "expected_fact_coverage": 0.0,
+  "format_compliance": 0.0,
+  "citation_presence": 0.0,
+  "hallucination_risk": "Unknown",
+  "scores_by_task_type": {
+    "not_found": 1.0
+  },
+  "case_results": [
+    {
+      "id": "not_found_award_001",
+      "name": "Unsupported award outcome question",
+      "task_type": "not_found",
+      "collection": "Contracts",
+      "query": "Did we win Solicitation HQ-2024-SOC-0041, what was the final award value, and when did performance start?",
+      "status": "PASS",
+      "overall_score": 1.0,
+      "deterministic_scores": {
+        "expected_source_hit_rate": null,
+        "expected_fact_coverage": null,
+        "required_section_compliance": null,
+        "missing_evidence_flag_compliance": null,
+        "citation_presence": null,
+        "not_found_handling": 1.0,
+        "matched_expected_sources": [],
+        "missing_expected_sources": [],
+        "matched_expected_facts": [],
+        "missing_expected_facts": [],
+        "matched_required_sections": [],
+        "missing_required_sections": [],
+        "matched_missing_evidence_flags": [],
+        "missing_expected_missing_evidence_flags": [],
+        "unacceptable_claims_present": [],
+        "citation_present": false,
+        "not_found_detected": true
+      },
+      "judge_scores": null,
+      "retrieved_sources": [
+        "IDIQ_GovCloud_Services_2023.md",
+        "NDA_Template_Standard.md"
+      ],
+      "retrieved_items": [
+        {
+          "collection_name": "contracts",
+          "source_filename": "IDIQ_GovCloud_Services_2023.md",
+          "file_path": "ConsultingKB/Contracts/IDIQ_GovCloud_Services_2023.md",
+          "score": 0.50508857,
+          "content": "# IDIQ Contract Summary \u2014 Government Cloud Advisory Services\n\n**Contract Name:** Federal Cloud Advisory and Implementation Services (FCAIS)\n**Contract Number:** GS-35F-0482W\n**Contracting Officer:** Patricia Huang, NIGP-CPP\n**Contracting Office:** GSA Federal Acquisition Service\n**Award Date:** September 15, 2023\n**Base Period:** 5 years (through September 2028)\n**Ceiling Value:** $85,000,000\n**Contract Type:** IDIQ, Time & Materials / Labor Hour",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 0
+          }
+        },
+        {
+          "collection_name": "contracts",
+          "source_filename": "IDIQ_GovCloud_Services_2023.md",
+          "file_path": "ConsultingKB/Contracts/IDIQ_GovCloud_Services_2023.md",
+          "score": 0.43894014,
+          "content": "## Key Contract Terms\n- Minimum order: $2,500\n- Maximum single task order: $15,000,000\n- Performance locations: On-site (DC metro) and remote authorized\n- Security clearances: Secret clearance required for DoD task orders\n- Small business subcontracting goal: 35%\n\n## Labor Categories & Rates (Sample)\n| Labor Category | Level | Hourly Rate |\n|----------------|-------|-------------|\n| Program Manager | Senior | $195/hr |\n| Cloud Architect | Senior | $215/hr |\n| Data Engineer | Mid | $165/hr |\n| Cybersecurity Analyst | Mid | $158/hr |\n| Business Analyst | Junior | $112/hr |",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 2
+          }
+        },
+        {
+          "collection_name": "contracts",
+          "source_filename": "IDIQ_GovCloud_Services_2023.md",
+          "file_path": "ConsultingKB/Contracts/IDIQ_GovCloud_Services_2023.md",
+          "score": 0.4051336,
+          "content": "## Scope\nFCAIS provides cloud advisory, architecture, migration, and managed services to civilian and DoD agencies. Authorized work includes:\n- Cloud strategy and roadmap development\n- IaaS/PaaS/SaaS migration and implementation\n- Cloud-native application development (DevSecOps)\n- Managed cloud operations and FinOps optimization\n- Zero-trust architecture design and implementation\n\n## Ordering Agencies (Active Task Orders)\n- Department of Veterans Affairs \u2014 3 active TOs ($9.8M, $3.2M, $1.1M)\n- HHS Office of the CIO \u2014 1 active TO ($4.7M)\n- DOJ Bureau of Prisons \u2014 1 active TO ($2.3M)",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 1
+          }
+        },
+        {
+          "collection_name": "contracts",
+          "source_filename": "NDA_Template_Standard.md",
+          "file_path": "ConsultingKB/Contracts/NDA_Template_Standard.md",
+          "score": 0.3441577,
+          "content": "### 5. Return/Destruction\nUpon request or termination of Purpose: return or certifiably destroy all CI within 10 business days.\n\n## Instructions for Use\n1. Fill in Party A (us) and Party B (counterpart) details in the header\n2. Define the \"Purpose\" specifically (e.g., \"Evaluation of teaming on Solicitation HQ-2024-SOC-0041\")\n3. Route to Legal for review if counterpart requests any material changes\n4. Execute via DocuSign; file executed copy in ContractVault under client folder",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 4
+          }
+        },
+        {
+          "collection_name": "contracts",
+          "source_filename": "NDA_Template_Standard.md",
+          "file_path": "ConsultingKB/Contracts/NDA_Template_Standard.md",
+          "score": 0.31835508,
+          "content": "## Purpose\nThis template is used for all teaming arrangements, partner discussions, and client pre-proposal engagements where proprietary technical approaches or pricing may be shared.\n\n## Key Provisions Summary",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 1
+          }
+        }
+      ],
+      "answer": "Based on the context provided, I cannot answer your question about Solicitation HQ-2024-SOC-0041. The only mention of this solicitation appears in NDA_Template_Standard.md as an example placeholder text for how to fill in the \"Purpose\" field of an NDA template (e.g., \"Evaluation of teaming on Solicitation HQ-2024-SOC-0041\"). There is no information about whether you won this solicitation, its award value, or when performance started.",
+      "warnings": [],
+      "failures": [],
+      "recommendations": [],
+      "task_metadata": {}
+    }
+  ],
+  "recommendations": [],
+  "output_markdown": "C:\\Users\\chase\\Documents\\kb-folder-agent\\evals\\reports\\eval_report_20260428_224718.md",
+  "output_json": "C:\\Users\\chase\\Documents\\kb-folder-agent\\evals\\results\\eval_results_20260428_224718.json"
+}
