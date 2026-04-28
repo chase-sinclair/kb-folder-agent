@@ -1,7 +1,10 @@
 import asyncio
+import json
 import logging
 import os
 import re
+from datetime import datetime, timezone
+from pathlib import Path
 
 from dotenv import load_dotenv
 from slack_bolt.async_app import AsyncApp
@@ -15,6 +18,10 @@ from agent.orchestrator import (
     infer_collection,
 )
 from agent.rag import answer_query, answer_query_all, answer_with_history, compare_collections, draft_section, find_gaps, score_requirement, summarize_diff, summarize_recent_changes
+from evals.config import REPORTS_DIR, RESULTS_DIR
+from evals.report import write_json_report, write_markdown_report
+from evals.runner import run_evaluations
+from evals.schema import EvalRunConfig
 from ingestion.quarantine import clear_all_quarantine, clear_quarantine, get_quarantined_files
 from storage.db import init_db
 
@@ -78,7 +85,7 @@ def _parse_command(text: str) -> tuple[str, str, str]:
     subcommand = parts[0].lower()
     rest = parts[1].strip() if len(parts) > 1 else ""
 
-    if subcommand not in {"ask", "clear-quarantine", "changes", "compare", "diff", "draft", "gaps", "score"}:
+    if subcommand not in {"ask", "clear-quarantine", "changes", "compare", "diff", "draft", "eval", "eval-report", "gaps", "score"}:
         return subcommand, "", rest
 
     # If rest starts with a quote, there's no folder — entire rest is the query
@@ -90,6 +97,183 @@ def _parse_command(text: str) -> tuple[str, str, str]:
     remainder = rest_parts[1].strip() if len(rest_parts) > 1 else ""
     query = re.sub(r'^["\']|["\']$', "", remainder)
     return subcommand, folder, query
+
+
+def _timestamp_slug() -> str:
+    return datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+
+
+def _find_latest_eval_results() -> Path | None:
+    paths = sorted(RESULTS_DIR.glob("eval_results_*.json"))
+    return paths[-1] if paths else None
+
+
+def _parse_eval_request(text: str) -> tuple[EvalRunConfig | None, str | None]:
+    request = (text or "").strip()
+    use_judge = False
+    tokens = [token for token in request.split() if token]
+
+    normalized_tokens: list[str] = []
+    for token in tokens:
+        if token.lower() == "judge":
+            use_judge = True
+        else:
+            normalized_tokens.append(token)
+
+    output_slug = _timestamp_slug()
+    config = EvalRunConfig(
+        cases_path="evals/test_cases.yaml",
+        output_markdown=str(REPORTS_DIR / f"eval_report_{output_slug}.md"),
+        output_json=str(RESULTS_DIR / f"eval_results_{output_slug}.json"),
+        use_judge=use_judge,
+    )
+
+    if not normalized_tokens or normalized_tokens[0].lower() == "all":
+        return config, None
+
+    if len(normalized_tokens) >= 2 and normalized_tokens[0].lower() == "case":
+        config.case_id = normalized_tokens[1]
+        return config, None
+
+    if len(normalized_tokens) >= 2 and normalized_tokens[0].lower() == "task-type":
+        config.task_type = normalized_tokens[1]
+        return config, None
+
+    if len(normalized_tokens) >= 2 and normalized_tokens[0].lower() == "collection":
+        config.collection = normalized_tokens[1]
+        return config, None
+
+    usage = (
+        "Usage: `/kb eval [all] [judge]`, `/kb eval case <id> [judge]`, "
+        "`/kb eval task-type <type> [judge]`, or `/kb eval collection <FolderName> [judge]`"
+    )
+    return None, usage
+
+
+def _build_eval_summary_blocks(summary, header_text: str, *, latest: bool = False) -> list[dict]:
+    if hasattr(summary, "case_results"):
+        case_results = [
+            {
+                "id": case.id,
+                "status": case.status,
+                "warnings": case.warnings,
+                "failures": case.failures,
+            }
+            for case in summary.case_results
+        ]
+        summary_data = {
+            "total_cases": summary.total_cases,
+            "passed": summary.passed,
+            "warnings": summary.warnings,
+            "failed": summary.failed,
+            "overall_score": summary.overall_score,
+            "retrieval_quality": summary.retrieval_quality,
+            "expected_fact_coverage": summary.expected_fact_coverage,
+            "format_compliance": summary.format_compliance,
+            "judge_enabled": summary.judge_enabled,
+            "hallucination_risk": summary.hallucination_risk,
+            "recommendations": summary.recommendations,
+            "output_markdown": summary.output_markdown,
+            "case_results": case_results,
+        }
+    else:
+        summary_data = summary
+
+    blocks = [
+        _header(header_text),
+        _divider(),
+        _section(
+            f"*Cases:* {summary_data['total_cases']}   *PASS:* {summary_data['passed']}   "
+            f"*WARN:* {summary_data['warnings']}   *FAIL:* {summary_data['failed']}"
+        ),
+        _section(
+            f"*Overall:* {summary_data['overall_score']:.0%}   "
+            f"*Retrieval:* {summary_data['retrieval_quality']:.0%}   "
+            f"*Facts:* {summary_data['expected_fact_coverage']:.0%}   "
+            f"*Format:* {summary_data['format_compliance']:.0%}"
+        ),
+        _context(
+            f"Judge enabled: {'yes' if summary_data['judge_enabled'] else 'no'}"
+            + (f" | Hallucination risk: {summary_data['hallucination_risk']}" if summary_data.get("hallucination_risk") else "")
+        ),
+    ]
+
+    warning_cases = [case for case in summary_data.get("case_results", []) if case.get("status") == "WARN"][:3]
+    failed_cases = [case for case in summary_data.get("case_results", []) if case.get("status") == "FAIL"][:3]
+
+    if failed_cases:
+        lines = [f"• `{case['id']}` — {case['failures'][0] if case.get('failures') else 'Failed'}" for case in failed_cases]
+        blocks.extend([_divider(), _section("*Failed Cases*\n" + "\n".join(lines))])
+
+    if warning_cases:
+        lines = [f"• `{case['id']}` — {case['warnings'][0] if case.get('warnings') else 'Warning'}" for case in warning_cases]
+        blocks.extend([_divider(), _section("*Warning Cases*\n" + "\n".join(lines))])
+
+    recommendations = summary_data.get("recommendations", [])[:2]
+    if recommendations:
+        blocks.extend([_divider(), _section("*Recommendations*\n" + "\n".join(f"• {item}" for item in recommendations))])
+
+    report_name = Path(summary_data["output_markdown"]).name if summary_data.get("output_markdown") else "n/a"
+    if latest:
+        blocks.append(_divider())
+        blocks.append(_context(f"Latest saved report: `{report_name}`"))
+    return blocks
+
+
+async def _post_eval_completion(client, channel_id: str, user_id: str, summary) -> None:
+    await client.chat_postEphemeral(
+        channel=channel_id,
+        user=user_id,
+        text="Evaluation run complete.",
+        blocks=_build_eval_summary_blocks(summary, "🧪 Evaluation Complete"),
+    )
+
+
+async def _run_eval_in_background(client, channel_id: str, user_id: str, config: EvalRunConfig) -> None:
+    try:
+        summary = await run_evaluations(config)
+        write_markdown_report(summary, config.output_markdown)
+        write_json_report(summary, config.output_json)
+        await _post_eval_completion(client, channel_id, user_id, summary)
+    except Exception as exc:
+        log.error("Background eval run failed: %s", exc)
+        await client.chat_postEphemeral(
+            channel=channel_id,
+            user=user_id,
+            text=f"Evaluation failed: {exc}",
+            blocks=[_section(f"Evaluation failed: {exc}")],
+        )
+
+
+async def _handle_eval(request: str, client, channel_id: str, user_id: str) -> tuple[str, list] | None:
+    config, usage_error = _parse_eval_request(request)
+    if usage_error:
+        return _error_blocks(usage_error)
+
+    await client.chat_postEphemeral(
+        channel=channel_id,
+        user=user_id,
+        text="Starting evaluation run.",
+        blocks=[
+            _section("Starting evaluation run in the background. I’ll post a summary here when it completes."),
+            _context(
+                f"Scope: case={config.case_id or 'all'} | task-type={config.task_type or 'all'} | "
+                f"collection={config.collection or 'all'} | judge={'on' if config.use_judge else 'off'}"
+            ),
+        ],
+    )
+    asyncio.create_task(_run_eval_in_background(client, channel_id, user_id, config))
+    return None
+
+
+async def _handle_eval_report() -> tuple[str, list]:
+    latest = _find_latest_eval_results()
+    if latest is None:
+        return _error_blocks("No saved evaluation results found yet. Run `/kb eval` first.")
+
+    summary = json.loads(latest.read_text(encoding="utf-8"))
+    blocks = _build_eval_summary_blocks(summary, "📊 Latest Evaluation Report", latest=True)
+    return "📊 Latest Evaluation Report", blocks
 
 
 # ---------------------------------------------------------------------------
@@ -435,6 +619,8 @@ def _help_blocks() -> tuple[str, list]:
         "• `/kb compare <Folder1> <Folder2> \"<question>\"` — Side-by-side comparative analysis of two collections\n"
         "• `/kb score <FolderName> \"<RFP requirement>\"` — Score KB readiness against a requirement (1–10)\n"
         "• `/kb gaps <FolderName> \"<topic>\"` — Gap analysis: what's missing relative to a topic\n"
+        "• `/kb eval [all|case <id>|task-type <type>|collection <FolderName>] [judge]` — Run Evaluation Center cases in the background\n"
+        "• `/kb eval-report` — Show the latest saved evaluation summary\n"
         "• `/kb clear-quarantine <FolderName> <filename>` — Remove file from quarantine\n"
         "• `/kb clear-quarantine-all` — Clear all quarantined files and re-ingest on restart"
     )
@@ -541,6 +727,8 @@ async def handle_kb(ack, respond, say, command):
 
     text = command.get("text", "")
     subcommand, folder, query = _parse_command(text)
+    channel_id = command.get("channel_id", "")
+    user_id = command.get("user_id", "")
 
     try:
         if subcommand == "list":
@@ -565,6 +753,13 @@ async def handle_kb(ack, respond, say, command):
             fallback, blocks = await _handle_compare(folder, query)
         elif subcommand == "score":
             fallback, blocks = await _handle_score(folder, query)
+        elif subcommand == "eval":
+            result = await _handle_eval(text[len("eval"):].strip(), app.client, channel_id, user_id)
+            if result is None:
+                return
+            fallback, blocks = result
+        elif subcommand == "eval-report":
+            fallback, blocks = await _handle_eval_report()
         else:
             fallback, blocks = _help_blocks()
     except Exception as exc:

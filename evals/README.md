@@ -38,6 +38,13 @@ Comparison runs write:
 
 - a timestamped Markdown comparison report under `evals/reports/`
 
+Slack integrations now available:
+
+- `/kb eval [all|case <id>|task-type <type>|collection <FolderName>] [judge]`
+- `/kb eval-report`
+
+`/kb eval` acknowledges immediately, runs in the background, and posts an ephemeral summary when it completes.
+
 ## Test Case Schema
 
 `evals/test_cases.yaml` stores cases under a top-level `test_cases` key.
@@ -64,3 +71,4 @@ Supported fields:
 - Judge mode is optional and disabled by default.
 - `evals/test_cases.yaml` now contains real benchmark cases based on the current `ConsultingKB` dataset.
 - `python -m evals.compare_runs` compares two saved JSON runs and highlights improved, regressed, and unchanged cases.
+- Slack command summaries are based on the latest saved JSON artifact under `evals/results/`.
