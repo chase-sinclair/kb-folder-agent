@@ -19,11 +19,12 @@ avoids unsupported claims across both normal KB Q&A and proposal-specific workfl
 
 ```bash
 python -m evals.run_evals
-python -m evals.run_evals --case qa_example_001
+python -m evals.run_evals --case pp_cloud_001
 python -m evals.run_evals --task-type requirement_scoring
-python -m evals.run_evals --collection SampleCollection
+python -m evals.run_evals --collection PastPerformance
 python -m evals.run_evals --use-judge
 python -m evals.run_evals --output evals/reports/latest_eval_report.md
+python -m evals.compare_runs evals/results/baseline.json evals/results/candidate.json
 ```
 
 ## Outputs
@@ -32,6 +33,10 @@ Each run writes:
 
 - a timestamped Markdown report under `evals/reports/`
 - a timestamped JSON result file under `evals/results/`
+
+Comparison runs write:
+
+- a timestamped Markdown comparison report under `evals/reports/`
 
 ## Test Case Schema
 
@@ -57,5 +62,5 @@ Supported fields:
 
 - The evaluator calls `agent.rag` functions directly. It does not drive Slack.
 - Judge mode is optional and disabled by default.
-- Starter cases are synthetic examples. Replace collection names and source filenames with
-  values that exist in your KB when you want meaningful run scores.
+- `evals/test_cases.yaml` now contains real benchmark cases based on the current `ConsultingKB` dataset.
+- `python -m evals.compare_runs` compares two saved JSON runs and highlights improved, regressed, and unchanged cases.
