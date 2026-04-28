@@ -113,6 +113,13 @@ def _build_recommendations(case: EvalTestCase, result: EvalCaseResult) -> list[s
         recommendations.append("Add stronger guardrails against unsupported or overstated claims.")
     if case.expected_not_found and not scores.not_found_detected:
         recommendations.append("Bias not-found cases toward refusal when the KB lacks supporting evidence.")
+    if result.judge_scores:
+        if result.judge_scores.hallucination_risk == "High":
+            recommendations.append("Reduce hallucination risk by tightening grounding instructions and refusal behavior.")
+        if result.judge_scores.missing_elements:
+            recommendations.append("Use the judge's missing-elements feedback to strengthen prompt coverage for this task.")
+        if result.judge_scores.unsupported_claims:
+            recommendations.append("Remove or constrain unsupported answer claims identified by the judge.")
     if not recommendations and result.status != "PASS":
         recommendations.append("Review retrieved chunks and answer grounding for this case.")
     return recommendations
@@ -171,11 +178,29 @@ async def run_case(case: EvalTestCase, use_judge: bool) -> EvalCaseResult:
         failures.append("Expected a not-found response but the answer did not clearly refuse.")
 
     judge_scores = None
+    judge_failed = False
     if use_judge:
         try:
             judge_scores = await judge_case(case, answer, retrieved_items)
+            if judge_scores.unsupported_claims:
+                warnings.append(
+                    "Judge flagged unsupported claims: " + ", ".join(judge_scores.unsupported_claims)
+                )
+            if judge_scores.missing_elements:
+                warnings.append(
+                    "Judge flagged missing elements: " + ", ".join(judge_scores.missing_elements)
+                )
         except Exception as exc:
+            judge_failed = True
             warnings.append(f"Judge evaluation failed: {exc}")
+
+    if use_judge and not failures and status == "PASS":
+        if judge_failed:
+            status = "WARN"
+        elif judge_scores and judge_scores.unsupported_claims:
+            status = "WARN"
+        elif judge_scores and judge_scores.hallucination_risk in {"Medium", "High"}:
+            status = "WARN"
 
     result = EvalCaseResult(
         id=case.id,
@@ -214,6 +239,19 @@ def _risk_label(case_results: list[EvalCaseResult]) -> str:
     return counts.most_common(1)[0][0]
 
 
+def _average_judge_score(case_results: list[EvalCaseResult], field_name: str) -> float | None:
+    values = []
+    for case in case_results:
+        if not case.judge_scores:
+            continue
+        value = getattr(case.judge_scores, field_name)
+        if value is not None:
+            values.append(value / 10.0)
+    if not values:
+        return None
+    return round(sum(values) / len(values), 4)
+
+
 def build_summary(
     case_results: list[EvalCaseResult],
     *,
@@ -240,6 +278,11 @@ def build_summary(
         cross_recommendations.append("Formalize task prompts around required output sections to improve format compliance.")
     if any(case.deterministic_scores.unacceptable_claims_present for case in case_results):
         cross_recommendations.append("Add stricter hallucination and unsupported-claim guardrails before expanding Slack-facing workflows.")
+    if use_judge:
+        if any(case.judge_scores and case.judge_scores.hallucination_risk == "High" for case in case_results):
+            cross_recommendations.append("Investigate high-hallucination-risk cases before treating the benchmark pack as a release gate.")
+        if any(case.judge_scores and case.judge_scores.missing_elements for case in case_results):
+            cross_recommendations.append("Use judge-reported missing elements to refine prompts for coverage-critical workflows.")
 
     return EvalRunSummary(
         run_timestamp=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),

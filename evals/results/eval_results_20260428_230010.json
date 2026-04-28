@@ -1,0 +1,1446 @@
+{
+  "run_timestamp": "2026-04-28 23:03 UTC",
+  "judge_enabled": true,
+  "total_cases": 8,
+  "passed": 8,
+  "warnings": 0,
+  "failed": 0,
+  "overall_score": 0.9861,
+  "retrieval_quality": 1.0,
+  "expected_fact_coverage": 1.0,
+  "format_compliance": 1.0,
+  "citation_presence": 0.8333,
+  "hallucination_risk": "Low",
+  "scores_by_task_type": {
+    "question_answering": 1.0,
+    "question_answering_all": 1.0,
+    "requirement_scoring": 1.0,
+    "proposal_drafting": 0.8889,
+    "gap_analysis": 1.0,
+    "collection_compare": 1.0,
+    "not_found": 1.0
+  },
+  "case_results": [
+    {
+      "id": "pp_cloud_001",
+      "name": "DISA cloud migration evidence",
+      "task_type": "question_answering",
+      "collection": "PastPerformance",
+      "query": "What past performance demonstrates Azure Government cloud migration experience with IL4 and IL5 authorization?",
+      "status": "PASS",
+      "overall_score": 1.0,
+      "deterministic_scores": {
+        "expected_source_hit_rate": 1.0,
+        "expected_fact_coverage": 1.0,
+        "required_section_compliance": null,
+        "missing_evidence_flag_compliance": null,
+        "citation_presence": 1.0,
+        "not_found_handling": null,
+        "matched_expected_sources": [
+          "2021_DoD_CloudMigration.md"
+        ],
+        "missing_expected_sources": [],
+        "matched_expected_facts": [
+          "Azure Government",
+          "IL4",
+          "IL5",
+          "47 mission-critical DoD applications",
+          "zero unplanned downtime"
+        ],
+        "missing_expected_facts": [],
+        "matched_required_sections": [],
+        "missing_required_sections": [],
+        "matched_missing_evidence_flags": [],
+        "missing_expected_missing_evidence_flags": [],
+        "unacceptable_claims_present": [],
+        "citation_present": true,
+        "not_found_detected": false
+      },
+      "judge_scores": {
+        "groundedness_score": 10,
+        "completeness_score": 10,
+        "citation_accuracy_score": 10,
+        "hallucination_risk": "Low",
+        "unsupported_claims": [],
+        "missing_elements": [],
+        "judge_notes": "The answer is fully grounded in the retrieved context from 2021_DoD_CloudMigration.md. All expected facts are present: Azure Government, IL4, IL5, 47 mission-critical DoD applications, and zero unplanned downtime. The answer correctly cites the source file and accurately reflects the contract details, accomplishments, and outcomes stated in the context. No unacceptable claims about winning the current solicitation or FedRAMP High were made. The answer provides comprehensive coverage of the relevant past performance without any hallucinated information."
+      },
+      "retrieved_sources": [
+        "2021_DoD_CloudMigration.md",
+        "2022_VA_DataAnalytics.md"
+      ],
+      "retrieved_items": [
+        {
+          "collection_name": "pastperformance",
+          "source_filename": "2021_DoD_CloudMigration.md",
+          "file_path": "ConsultingKB/PastPerformance/2021_DoD_CloudMigration.md",
+          "score": 0.698678,
+          "content": "## Executive Summary\nMigrated 47 mission-critical DoD applications from on-premises DISA data centers to Azure Government cloud, achieving IL4 and IL5 authorization for 12 of those applications. Delivered with zero unplanned downtime during migration windows.\n\n## Key Accomplishments\n- Completed all 47 app migrations on schedule (24-month program)\n- Achieved $2.1M annualized infrastructure cost savings post-migration\n- All 12 IL4/IL5 apps authorized within 6 months of migration\n- Developed reusable DevSecOps pipeline templates now used by 3 other DISA programs",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 1
+          }
+        },
+        {
+          "collection_name": "pastperformance",
+          "source_filename": "2021_DoD_CloudMigration.md",
+          "file_path": "ConsultingKB/PastPerformance/2021_DoD_CloudMigration.md",
+          "score": 0.5414472,
+          "content": "# DoD DISA Cloud Migration \u2014 Past Performance\n\n**Client:** Defense Information Systems Agency (DISA)\n**Contract Number:** HC1047-20-F-0082\n**Period of Performance:** January 2021 \u2013 December 2022\n**Contract Value:** $7.6M (FFP)\n**Program Manager:** Lt. Col. (Ret.) Brian Torres, PMP",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 0
+          }
+        },
+        {
+          "collection_name": "pastperformance",
+          "source_filename": "2022_VA_DataAnalytics.md",
+          "file_path": "ConsultingKB/PastPerformance/2022_VA_DataAnalytics.md",
+          "score": 0.49126518,
+          "content": "## Executive Summary\nArchitected and built a cloud-native analytics platform on AWS GovCloud supporting 2,400 VA analysts. Platform ingests 4.2TB of veteran health and benefits data daily, enabling near-real-time dashboards for benefits processing, hospital capacity, and claims fraud detection.\n\n## Key Accomplishments\n- Reduced benefits processing report generation time from 3 days to 4 hours\n- Built ML fraud detection model achieving 91% precision on claims anomalies \u2014 flagged $14M in potentially fraudulent claims in first 6 months\n- Maintained 99.94% platform uptime across 18 months of operation\n- Delivered ATO within 8 months using continuous Authorization to Operate (cATO) approach",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 1
+          }
+        },
+        {
+          "collection_name": "pastperformance",
+          "source_filename": "2022_VA_DataAnalytics.md",
+          "file_path": "ConsultingKB/PastPerformance/2022_VA_DataAnalytics.md",
+          "score": 0.46054935,
+          "content": "## Technologies Used\nAWS GovCloud (S3, Redshift, SageMaker, Lake Formation), Tableau, dbt, Apache Airflow, Python, Terraform\n\n## COR Reference\nDr. Priya Nair | priya.nair@va.gov | (202) 555-0291\n\"Exceptional technical depth and a true partner. Their ML fraud model alone justified the entire contract value.\"",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 2
+          }
+        },
+        {
+          "collection_name": "pastperformance",
+          "source_filename": "2022_VA_DataAnalytics.md",
+          "file_path": "ConsultingKB/PastPerformance/2022_VA_DataAnalytics.md",
+          "score": 0.4580323,
+          "content": "# VA Enterprise Data Analytics Platform \u2014 Past Performance\n\n**Client:** Department of Veterans Affairs, Office of Data Governance\n**Contract Number:** VA118-21-D-0055 / Task Order 0003\n**Period of Performance:** July 2022 \u2013 Present (Option Year 2 active)\n**Contract Value:** $31.2M IDIQ; $9.8M task order\n**Program Manager:** James Okafor, PMP, CISSP",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 0
+          }
+        }
+      ],
+      "answer": "The DoD DISA Cloud Migration project (Contract HC1047-20-F-0082) demonstrates Azure Government cloud migration experience with IL4 and IL5 authorization. According to 2021_DoD_CloudMigration.md, this $7.6M firm-fixed-price contract involved migrating 47 mission-critical DoD applications from on-premises DISA data centers to Azure Government cloud. Of those 47 applications, 12 achieved IL4 and IL5 authorization within 6 months of migration. The project was completed on schedule over a 24-month period (January 2021 \u2013 December 2022) with zero unplanned downtime during migration windows. Additional outcomes included $2.1M in annualized infrastructure cost savings and the development of reusable DevSecOps pipeline templates that are now used by 3 other DISA programs. The Program Manager was Lt. Col. (Ret.) Brian Torres, PMP.",
+      "warnings": [],
+      "failures": [],
+      "recommendations": [],
+      "task_metadata": {}
+    },
+    {
+      "id": "qa_all_analytics_001",
+      "name": "Cross-collection analytics and staffing evidence",
+      "task_type": "question_answering_all",
+      "collection": null,
+      "query": "What evidence do we have for federal analytics platforms and who appears qualified to lead the data engineering effort?",
+      "status": "PASS",
+      "overall_score": 1.0,
+      "deterministic_scores": {
+        "expected_source_hit_rate": 1.0,
+        "expected_fact_coverage": 1.0,
+        "required_section_compliance": null,
+        "missing_evidence_flag_compliance": null,
+        "citation_presence": 1.0,
+        "not_found_handling": null,
+        "matched_expected_sources": [
+          "2022_VA_DataAnalytics.md",
+          "James_Okafor_DataEngineer.md"
+        ],
+        "missing_expected_sources": [],
+        "matched_expected_facts": [
+          "2,400 VA analysts",
+          "4.2TB",
+          "AWS GovCloud",
+          "James Okafor",
+          "ML fraud detection"
+        ],
+        "missing_expected_facts": [],
+        "matched_required_sections": [],
+        "missing_required_sections": [],
+        "matched_missing_evidence_flags": [],
+        "missing_expected_missing_evidence_flags": [],
+        "unacceptable_claims_present": [],
+        "citation_present": true,
+        "not_found_detected": false
+      },
+      "judge_scores": {
+        "groundedness_score": 10,
+        "completeness_score": 10,
+        "citation_accuracy_score": 10,
+        "hallucination_risk": "Low",
+        "unsupported_claims": [],
+        "missing_elements": [],
+        "judge_notes": "The answer comprehensively addresses both parts of the query with excellent grounding in the retrieved context. All expected facts are present: 2,400 VA analysts, 4.2TB, AWS GovCloud, James Okafor, and ML fraud detection. The answer correctly cites both expected sources (2022_VA_DataAnalytics.md and James_Okafor_DataEngineer.md) and accurately attributes specific claims to their sources. No unacceptable claims about contract awards or guaranteed staffing are made. The citation accuracy is excellent, with each major claim traceable to specific documents. The answer provides a well-organized synthesis of the evidence without embellishment or hallucination."
+      },
+      "retrieved_sources": [
+        "DataModernization_WhitePaper.md",
+        "James_Okafor_DataEngineer.md",
+        "PricingStrategy_Notes.md",
+        "2022_VA_DataAnalytics.md",
+        "IDIQ_GovCloud_Services_2023.md"
+      ],
+      "retrieved_items": [
+        {
+          "collection_name": "technicalvolume",
+          "source_filename": "DataModernization_WhitePaper.md",
+          "file_path": "ConsultingKB/TechnicalVolume/DataModernization_WhitePaper.md",
+          "score": 0.5248801,
+          "content": "# Data Modernization Whitepaper: Federal Agency Playbook\n\n**Authors:** Analytics Practice, Strategy & Innovation Group\n**Version:** 2.1 | February 2024",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 0
+          }
+        },
+        {
+          "collection_name": "technicalvolume",
+          "source_filename": "DataModernization_WhitePaper.md",
+          "file_path": "ConsultingKB/TechnicalVolume/DataModernization_WhitePaper.md",
+          "score": 0.5248801,
+          "content": "# Data Modernization Whitepaper: Federal Agency Playbook\n\n**Authors:** Analytics Practice, Strategy & Innovation Group\n**Version:** 2.1 | February 2024",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 0
+          }
+        },
+        {
+          "collection_name": "technicalvolume",
+          "source_filename": "DataModernization_WhitePaper.md",
+          "file_path": "ConsultingKB/TechnicalVolume/DataModernization_WhitePaper.md",
+          "score": 0.4918934,
+          "content": "## Abstract\nFederal agencies face mounting pressure to modernize aging data infrastructure while maintaining compliance with FISMA, Privacy Act, and Section 508. This whitepaper documents our proven 5-phase Data Modernization Framework, validated across 11 federal engagements totaling $127M in contract value.\n\n## Phase 1: Discovery & Inventory (Weeks 1\u20134)\nAutomated scanning of all data stores using our proprietary DataMapper tool. Output: enterprise data catalog with sensitivity classifications, lineage maps, and quality scores. Average discovery: 3,400 tables, 280 data owners identified.",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 1
+          }
+        },
+        {
+          "collection_name": "resumes",
+          "source_filename": "James_Okafor_DataEngineer.md",
+          "file_path": "ConsultingKB/Resumes/James_Okafor_DataEngineer.md",
+          "score": 0.5795931,
+          "content": "# James Okafor, PMP, CISSP\n**Title:** Senior Data Engineer / Analytics Lead  \n**Clearance:** Secret  \n**Years of Experience:** 11\n\n## Summary\nFederal data engineering specialist with deep expertise in cloud-native analytics platforms, ETL pipeline architecture, and ML model deployment. Led data platform build for VA analytics serving 2,400 analysts. Strong background in AWS GovCloud, Snowflake, and dbt.",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 0
+          }
+        },
+        {
+          "collection_name": "resumes",
+          "source_filename": "James_Okafor_DataEngineer.md",
+          "file_path": "ConsultingKB/Resumes/James_Okafor_DataEngineer.md",
+          "score": 0.5744616,
+          "content": "**VA Enterprise Data Analytics Platform** (2022\u2013Present) | $9.8M\nAnalytics Lead. Architected AWS GovCloud data lake ingesting 4.2TB/day. Built ML fraud detection model; $14M in flagged claims in first 6 months.\n\n**DHS Data Modernization** (2020\u20132022) | $6.1M\nSenior Data Engineer. Migrated 340 tables from Oracle on-prem to Snowflake on Azure Government. Reduced query times by 9\u00d7.",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 2
+          }
+        },
+        {
+          "collection_name": "resumes",
+          "source_filename": "James_Okafor_DataEngineer.md",
+          "file_path": "ConsultingKB/Resumes/James_Okafor_DataEngineer.md",
+          "score": 0.5357396,
+          "content": "## Technical Skills\n**Cloud:** AWS GovCloud (expert), Azure Government (proficient), GCP (familiar)  \n**Data Platforms:** Redshift, Snowflake, BigQuery, Databricks  \n**Orchestration:** Apache Airflow, AWS Step Functions, dbt  \n**ML/AI:** SageMaker, scikit-learn, PyTorch (inference), MLflow  \n**Languages:** Python (expert), SQL (expert), Scala (proficient), Bash  \n**Visualization:** Tableau, Power BI, QuickSight  \n\n## Selected Project Experience",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 1
+          }
+        },
+        {
+          "collection_name": "costvolume",
+          "source_filename": "PricingStrategy_Notes.md",
+          "file_path": "ConsultingKB/CostVolume/PricingStrategy_Notes.md",
+          "score": 0.38116008,
+          "content": "## Note\nCompetitors SAIC and Leidos have existing Splunk enterprise licenses that give them ~$400K structural cost advantage. We must emphasize our MTTD track record and FedRAMP expertise to justify price premium.",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 4
+          }
+        },
+        {
+          "collection_name": "costvolume",
+          "source_filename": "PricingStrategy_Notes.md",
+          "file_path": "ConsultingKB/CostVolume/PricingStrategy_Notes.md",
+          "score": 0.31382504,
+          "content": "## Win Price Target\nBased on competitive intelligence and GSA Schedule rates for comparable work, our win price target is $4.2M\u2013$4.8M for the base year. We should NOT bid above $5.1M.\n\n## Proposed Labor Mix (Base Year)\n| Role | Hours | Rate | Total |\n|------|-------|------|-------|\n| Program Manager (Sr) | 1,920 | $195 | $374,400 |\n| Splunk Architect x2 | 3,840 | $215 | $825,600 |\n| SOC Analyst x4 | 7,680 | $158 | $1,213,440 |\n| Threat Intel Analyst | 1,920 | $172 | $330,240 |\n| Data Scientist (50%) | 960 | $188 | $180,480 |\n| **Labor Subtotal** | | | **$2,924,160** |",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 1
+          }
+        },
+        {
+          "collection_name": "costvolume",
+          "source_filename": "PricingStrategy_Notes.md",
+          "file_path": "ConsultingKB/CostVolume/PricingStrategy_Notes.md",
+          "score": 0.27765033,
+          "content": "## ODCs (Estimated)\n- Splunk ES licensing (pass-through): $680,000/yr\n- Travel (quarterly on-site reviews): $24,000/yr\n- Training/certifications: $18,000/yr\n- **ODC Subtotal:** $722,000\n\n## Overhead & Profit\n- Overhead rate: 42% on labor = $1,228,147\n- G&A: 8% on (labor + overhead) = $331,625\n- Fee/profit: 8% = $335,834",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 2
+          }
+        },
+        {
+          "collection_name": "pastperformance",
+          "source_filename": "2022_VA_DataAnalytics.md",
+          "file_path": "ConsultingKB/PastPerformance/2022_VA_DataAnalytics.md",
+          "score": 0.5139328,
+          "content": "## Executive Summary\nArchitected and built a cloud-native analytics platform on AWS GovCloud supporting 2,400 VA analysts. Platform ingests 4.2TB of veteran health and benefits data daily, enabling near-real-time dashboards for benefits processing, hospital capacity, and claims fraud detection.\n\n## Key Accomplishments\n- Reduced benefits processing report generation time from 3 days to 4 hours\n- Built ML fraud detection model achieving 91% precision on claims anomalies \u2014 flagged $14M in potentially fraudulent claims in first 6 months\n- Maintained 99.94% platform uptime across 18 months of operation\n- Delivered ATO within 8 months using continuous Authorization to Operate (cATO) approach",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 1
+          }
+        },
+        {
+          "collection_name": "pastperformance",
+          "source_filename": "2022_VA_DataAnalytics.md",
+          "file_path": "ConsultingKB/PastPerformance/2022_VA_DataAnalytics.md",
+          "score": 0.4803817,
+          "content": "## Technologies Used\nAWS GovCloud (S3, Redshift, SageMaker, Lake Formation), Tableau, dbt, Apache Airflow, Python, Terraform\n\n## COR Reference\nDr. Priya Nair | priya.nair@va.gov | (202) 555-0291\n\"Exceptional technical depth and a true partner. Their ML fraud model alone justified the entire contract value.\"",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 2
+          }
+        },
+        {
+          "collection_name": "pastperformance",
+          "source_filename": "2022_VA_DataAnalytics.md",
+          "file_path": "ConsultingKB/PastPerformance/2022_VA_DataAnalytics.md",
+          "score": 0.47745955,
+          "content": "# VA Enterprise Data Analytics Platform \u2014 Past Performance\n\n**Client:** Department of Veterans Affairs, Office of Data Governance\n**Contract Number:** VA118-21-D-0055 / Task Order 0003\n**Period of Performance:** July 2022 \u2013 Present (Option Year 2 active)\n**Contract Value:** $31.2M IDIQ; $9.8M task order\n**Program Manager:** James Okafor, PMP, CISSP",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 0
+          }
+        },
+        {
+          "collection_name": "contracts",
+          "source_filename": "IDIQ_GovCloud_Services_2023.md",
+          "file_path": "ConsultingKB/Contracts/IDIQ_GovCloud_Services_2023.md",
+          "score": 0.39652532,
+          "content": "## Scope\nFCAIS provides cloud advisory, architecture, migration, and managed services to civilian and DoD agencies. Authorized work includes:\n- Cloud strategy and roadmap development\n- IaaS/PaaS/SaaS migration and implementation\n- Cloud-native application development (DevSecOps)\n- Managed cloud operations and FinOps optimization\n- Zero-trust architecture design and implementation\n\n## Ordering Agencies (Active Task Orders)\n- Department of Veterans Affairs \u2014 3 active TOs ($9.8M, $3.2M, $1.1M)\n- HHS Office of the CIO \u2014 1 active TO ($4.7M)\n- DOJ Bureau of Prisons \u2014 1 active TO ($2.3M)",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 1
+          }
+        },
+        {
+          "collection_name": "contracts",
+          "source_filename": "IDIQ_GovCloud_Services_2023.md",
+          "file_path": "ConsultingKB/Contracts/IDIQ_GovCloud_Services_2023.md",
+          "score": 0.34857032,
+          "content": "## Key Contract Terms\n- Minimum order: $2,500\n- Maximum single task order: $15,000,000\n- Performance locations: On-site (DC metro) and remote authorized\n- Security clearances: Secret clearance required for DoD task orders\n- Small business subcontracting goal: 35%\n\n## Labor Categories & Rates (Sample)\n| Labor Category | Level | Hourly Rate |\n|----------------|-------|-------------|\n| Program Manager | Senior | $195/hr |\n| Cloud Architect | Senior | $215/hr |\n| Data Engineer | Mid | $165/hr |\n| Cybersecurity Analyst | Mid | $158/hr |\n| Business Analyst | Junior | $112/hr |",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 2
+          }
+        },
+        {
+          "collection_name": "contracts",
+          "source_filename": "IDIQ_GovCloud_Services_2023.md",
+          "file_path": "ConsultingKB/Contracts/IDIQ_GovCloud_Services_2023.md",
+          "score": 0.315689,
+          "content": "# IDIQ Contract Summary \u2014 Government Cloud Advisory Services\n\n**Contract Name:** Federal Cloud Advisory and Implementation Services (FCAIS)\n**Contract Number:** GS-35F-0482W\n**Contracting Officer:** Patricia Huang, NIGP-CPP\n**Contracting Office:** GSA Federal Acquisition Service\n**Award Date:** September 15, 2023\n**Base Period:** 5 years (through September 2028)\n**Ceiling Value:** $85,000,000\n**Contract Type:** IDIQ, Time & Materials / Labor Hour",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 0
+          }
+        }
+      ],
+      "answer": "## Federal Analytics Platform Evidence\n\nThe strongest evidence comes from the **VA Enterprise Data Analytics Platform**, a cloud-native analytics platform on AWS GovCloud supporting 2,400 VA analysts. Key accomplishments include:\n\n- Ingests 4.2TB of veteran health and benefits data daily\n- Reduced benefits processing report generation time from 3 days to 4 hours\n- Built ML fraud detection model achieving 91% precision on claims anomalies, flagging $14M in potentially fraudulent claims in first 6 months\n- Maintained 99.94% platform uptime across 18 months of operation\n- Delivered ATO within 8 months using continuous Authorization to Operate (cATO) approach\n- Contract value: $9.8M task order under a $31.2M IDIQ\n\n(technicalvolume: DataModernization_WhitePaper.md; pastperformance: 2022_VA_DataAnalytics.md)\n\nThe COR reference from Dr. Priya Nair stated: *\"Exceptional technical depth and a true partner. Their ML fraud model alone justified the entire contract value.\"* (pastperformance: 2022_VA_DataAnalytics.md)\n\nAdditional federal analytics methodology is documented in the **Data Modernization Framework**, validated across 11 federal engagements totaling $127M in contract value, which includes automated data discovery, enterprise cataloging, and sensitivity classifications. (technicalvolume: DataModernization_WhitePaper.md)\n\n---\n\n## Qualified Data Engineering Lead\n\n**James Okafor, PMP, CISSP** appears highly qualified to lead data engineering efforts. His qualifications include:\n\n- 11 years of experience as a Senior Data Engineer / Analytics Lead\n- Holds Secret clearance\n- Served as **Analytics Lead** on the VA Enterprise Data Analytics Platform ($9.8M), where he architected the AWS GovCloud data lake and built the ML fraud detection model\n- Served as **Senior Data Engineer** on DHS Data Modernization ($6.1M), migrating 340 tables from Oracle on-prem to Snowflake on Azure Government with 9\u00d7 query time reduction\n- Technical expertise: AWS GovCloud (expert), Snowflake, Redshift, Apache Airflow, dbt, SageMaker, Python (expert), SQL (expert)\n\n(resumes: James_Okafor_DataEngineer.md; pastperformance: 2022_VA_DataAnalytics.md)",
+      "warnings": [],
+      "failures": [],
+      "recommendations": [],
+      "task_metadata": {
+        "sources_by_collection": {
+          "technicalvolume": [
+            "DataModernization_WhitePaper.md"
+          ],
+          "resumes": [
+            "James_Okafor_DataEngineer.md"
+          ],
+          "costvolume": [
+            "PricingStrategy_Notes.md"
+          ],
+          "pastperformance": [
+            "2022_VA_DataAnalytics.md"
+          ],
+          "contracts": [
+            "IDIQ_GovCloud_Services_2023.md"
+          ]
+        }
+      }
+    },
+    {
+      "id": "score_soc_001",
+      "name": "Score SOC modernization readiness",
+      "task_type": "requirement_scoring",
+      "collection": "PastPerformance",
+      "query": "Describe experience modernizing a federal SOC by consolidating security tools, implementing zero-trust architecture, and obtaining FedRAMP High authorization while reducing detection time.",
+      "status": "PASS",
+      "overall_score": 1.0,
+      "deterministic_scores": {
+        "expected_source_hit_rate": 1.0,
+        "expected_fact_coverage": 1.0,
+        "required_section_compliance": 1.0,
+        "missing_evidence_flag_compliance": null,
+        "citation_presence": 1.0,
+        "not_found_handling": null,
+        "matched_expected_sources": [
+          "2023_DHS_CyberTransformation.md"
+        ],
+        "missing_expected_sources": [],
+        "matched_expected_facts": [
+          "Splunk Enterprise Security",
+          "zero-trust",
+          "FedRAMP High",
+          "67%",
+          "7.2 hours"
+        ],
+        "missing_expected_facts": [],
+        "matched_required_sections": [
+          "COMPOSITE",
+          "CRITERIA",
+          "STRENGTHS",
+          "WEAKNESSES",
+          "TO IMPROVE"
+        ],
+        "missing_required_sections": [],
+        "matched_missing_evidence_flags": [],
+        "missing_expected_missing_evidence_flags": [],
+        "unacceptable_claims_present": [],
+        "citation_present": true,
+        "not_found_detected": false
+      },
+      "judge_scores": {
+        "groundedness_score": 9,
+        "completeness_score": 10,
+        "citation_accuracy_score": 10,
+        "hallucination_risk": "Low",
+        "unsupported_claims": [
+          "The claim that CPARS rating is 'presumably Exceptional or Very Good' is speculative"
+        ],
+        "missing_elements": [],
+        "judge_notes": "The answer is exceptionally well-grounded in the retrieved context, with all expected facts (Splunk Enterprise Security, zero-trust, FedRAMP High, 67%, 7.2 hours) accurately cited from 2023_DHS_CyberTransformation.md. All required sections are present and properly structured. Citations are precise and directly support the claims made. The answer correctly avoids unacceptable claims like 'perfect fit' or 'guaranteed compliance.' The only minor issue is the speculative comment about CPARS rating being 'presumably Exceptional or Very Good' which is not supported by the retrieved context. The scoring criteria, strengths, weaknesses, and improvement recommendations are all well-reasoned and tied to specific evidence from the source material."
+      },
+      "retrieved_sources": [
+        "2023_DHS_CyberTransformation.md",
+        "2021_DoD_CloudMigration.md",
+        "2022_VA_DataAnalytics.md"
+      ],
+      "retrieved_items": [
+        {
+          "collection_name": "pastperformance",
+          "source_filename": "2023_DHS_CyberTransformation.md",
+          "file_path": "ConsultingKB/PastPerformance/2023_DHS_CyberTransformation.md",
+          "score": 0.7127192,
+          "content": "## Executive Summary\nDelivered a full-scale cybersecurity modernization for DHS's Office of the CISO, migrating 14 legacy security tools to a unified SIEM platform (Splunk Enterprise Security) and implementing zero-trust network architecture across 6,200 endpoints.\n\n## Key Accomplishments\n- Reduced mean time to detect (MTTD) incidents by 67% \u2014 from 22 hours to 7.2 hours\n- Achieved FedRAMP High authorization for cloud-hosted SOC environment in 11 months\n- Deployed automated threat-hunting playbooks covering 38 MITRE ATT&CK techniques\n- Trained 142 DHS security analysts on new tooling; 98% passed certification exam",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 1
+          }
+        },
+        {
+          "collection_name": "pastperformance",
+          "source_filename": "2023_DHS_CyberTransformation.md",
+          "file_path": "ConsultingKB/PastPerformance/2023_DHS_CyberTransformation.md",
+          "score": 0.5748055,
+          "content": "## Relevance to Current Opportunity\nDirectly demonstrates our capability in large-scale federal cybersecurity modernization, FedRAMP authorization management, and enterprise SIEM deployment \u2014 all core requirements of the current solicitation.\n\n## COR Reference\nMarcus Webb | marcus.webb@hq.dhs.gov | (202) 555-0174\n\"The team delivered ahead of schedule and consistently exceeded quality metrics. Their zero-trust implementation became a model for other DHS components.\"",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 2
+          }
+        },
+        {
+          "collection_name": "pastperformance",
+          "source_filename": "2021_DoD_CloudMigration.md",
+          "file_path": "ConsultingKB/PastPerformance/2021_DoD_CloudMigration.md",
+          "score": 0.4990092,
+          "content": "## Executive Summary\nMigrated 47 mission-critical DoD applications from on-premises DISA data centers to Azure Government cloud, achieving IL4 and IL5 authorization for 12 of those applications. Delivered with zero unplanned downtime during migration windows.\n\n## Key Accomplishments\n- Completed all 47 app migrations on schedule (24-month program)\n- Achieved $2.1M annualized infrastructure cost savings post-migration\n- All 12 IL4/IL5 apps authorized within 6 months of migration\n- Developed reusable DevSecOps pipeline templates now used by 3 other DISA programs",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 1
+          }
+        },
+        {
+          "collection_name": "pastperformance",
+          "source_filename": "2022_VA_DataAnalytics.md",
+          "file_path": "ConsultingKB/PastPerformance/2022_VA_DataAnalytics.md",
+          "score": 0.48121333,
+          "content": "## Executive Summary\nArchitected and built a cloud-native analytics platform on AWS GovCloud supporting 2,400 VA analysts. Platform ingests 4.2TB of veteran health and benefits data daily, enabling near-real-time dashboards for benefits processing, hospital capacity, and claims fraud detection.\n\n## Key Accomplishments\n- Reduced benefits processing report generation time from 3 days to 4 hours\n- Built ML fraud detection model achieving 91% precision on claims anomalies \u2014 flagged $14M in potentially fraudulent claims in first 6 months\n- Maintained 99.94% platform uptime across 18 months of operation\n- Delivered ATO within 8 months using continuous Authorization to Operate (cATO) approach",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 1
+          }
+        },
+        {
+          "collection_name": "pastperformance",
+          "source_filename": "2023_DHS_CyberTransformation.md",
+          "file_path": "ConsultingKB/PastPerformance/2023_DHS_CyberTransformation.md",
+          "score": 0.44815695,
+          "content": "# DHS Cyber Transformation Program \u2014 Past Performance\n\n**Client:** Department of Homeland Security (DHS)\n**Contract Number:** HSHQDC-21-C-00412\n**Period of Performance:** March 2021 \u2013 February 2024\n**Contract Value:** $18.4M (CPFF)\n**Program Manager:** Sarah Chen, PMP",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 0
+          }
+        },
+        {
+          "collection_name": "pastperformance",
+          "source_filename": "2021_DoD_CloudMigration.md",
+          "file_path": "ConsultingKB/PastPerformance/2021_DoD_CloudMigration.md",
+          "score": 0.41204953,
+          "content": "# DoD DISA Cloud Migration \u2014 Past Performance\n\n**Client:** Defense Information Systems Agency (DISA)\n**Contract Number:** HC1047-20-F-0082\n**Period of Performance:** January 2021 \u2013 December 2022\n**Contract Value:** $7.6M (FFP)\n**Program Manager:** Lt. Col. (Ret.) Brian Torres, PMP",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 0
+          }
+        },
+        {
+          "collection_name": "pastperformance",
+          "source_filename": "2022_VA_DataAnalytics.md",
+          "file_path": "ConsultingKB/PastPerformance/2022_VA_DataAnalytics.md",
+          "score": 0.3769464,
+          "content": "## Technologies Used\nAWS GovCloud (S3, Redshift, SageMaker, Lake Formation), Tableau, dbt, Apache Airflow, Python, Terraform\n\n## COR Reference\nDr. Priya Nair | priya.nair@va.gov | (202) 555-0291\n\"Exceptional technical depth and a true partner. Their ML fraud model alone justified the entire contract value.\"",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 2
+          }
+        },
+        {
+          "collection_name": "pastperformance",
+          "source_filename": "2022_VA_DataAnalytics.md",
+          "file_path": "ConsultingKB/PastPerformance/2022_VA_DataAnalytics.md",
+          "score": 0.3545415,
+          "content": "# VA Enterprise Data Analytics Platform \u2014 Past Performance\n\n**Client:** Department of Veterans Affairs, Office of Data Governance\n**Contract Number:** VA118-21-D-0055 / Task Order 0003\n**Period of Performance:** July 2022 \u2013 Present (Option Year 2 active)\n**Contract Value:** $31.2M IDIQ; $9.8M task order\n**Program Manager:** James Okafor, PMP, CISSP",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 0
+          }
+        },
+        {
+          "collection_name": "pastperformance",
+          "source_filename": "2021_DoD_CloudMigration.md",
+          "file_path": "ConsultingKB/PastPerformance/2021_DoD_CloudMigration.md",
+          "score": 0.3496223,
+          "content": "## COR Reference\nCol. Sandra Park | sandra.park@disa.mil | DSN 312-555-0183\n\"Best-in-class migration team. Their documentation and knowledge transfer left our team fully self-sufficient.\"",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 2
+          }
+        }
+      ],
+      "answer": "# Evaluation: Federal SOC Modernization Requirement\n\n## COMPOSITE: 9/10 \u2014 Outstanding\n\nThis requirement is exceptionally well-supported by direct, recent, highly relevant past performance with measurable outcomes and COR validation.\n\n---\n\n## CRITERIA\n\n\u2022 **Security Tool Consolidation** \u2014 9/10: Direct evidence of migrating 14 legacy security tools to unified Splunk Enterprise Security SIEM platform at enterprise scale (6,200 endpoints). Specific tool count and target platform identified. (2023_DHS_CyberTransformation.md)\n\n\u2022 **Zero-Trust Architecture Implementation** \u2014 9/10: Explicitly deployed zero-trust network architecture across 6,200 endpoints; COR states implementation \"became a model for other DHS components,\" indicating quality validation. (2023_DHS_CyberTransformation.md)\n\n\u2022 **FedRAMP High Authorization** \u2014 9/10: Achieved FedRAMP High authorization for cloud-hosted SOC environment within 11 months \u2014 directly on point with specific timeline. (2023_DHS_CyberTransformation.md)\n\n\u2022 **Detection Time Reduction** \u2014 10/10: Quantified MTTD reduction of 67% (22 hours \u2192 7.2 hours) with before/after metrics \u2014 precisely what evaluators seek. (2023_DHS_CyberTransformation.md)\n\n\u2022 **Federal SOC Context** \u2014 9/10: Work performed for DHS Office of the CISO under CPFF contract ($18.4M), recent PoP (2021\u20132024), with named COR reference. (2023_DHS_CyberTransformation.md)\n\n---\n\n## STRENGTHS\n\n\u2022 Measurable detection time improvement (67% MTTD reduction, 22hrs\u21927.2hrs) provides concrete evidence of operational impact (2023_DHS_CyberTransformation.md)\n\n\u2022 COR quote explicitly validates quality and positions work as organizational benchmark: \"zero-trust implementation became a model for other DHS components\" (2023_DHS_CyberTransformation.md)\n\n\u2022 All four sub-requirements addressed within a single, recent, substantial federal contract ($18.4M, DHS) demonstrating integrated delivery capability (2023_DHS_CyberTransformation.md)\n\n---\n\n## WEAKNESSES\n\n\u2022 No CPARS rating or adjectival score cited; COR quote is strong but formal performance rating would strengthen evaluation defensibility (not found)\n\n\u2022 Limited detail on specific challenges overcome or risk mitigation during consolidation \u2014 evaluators may question complexity handling (2023_DHS_CyberTransformation.md)\n\n\u2022 Analyst training metrics (142 trained, 98% pass rate) are included but not directly tied to sustained detection improvement outcomes (2023_DHS_CyberTransformation.md)\n\n---\n\n## TO IMPROVE\n\nObtain and reference the official CPARS rating (presumably Exceptional or Very Good) for the DHS Cyber Transformation contract \u2014 this would convert the strong COR anecdote into government-validated past performance, raising the composite from 9 to a defensible 10.",
+      "warnings": [
+        "Judge flagged unsupported claims: The claim that CPARS rating is 'presumably Exceptional or Very Good' is speculative"
+      ],
+      "failures": [],
+      "recommendations": [
+        "Remove or constrain unsupported answer claims identified by the judge."
+      ],
+      "task_metadata": {}
+    },
+    {
+      "id": "draft_fedramp_001",
+      "name": "Draft proposal section with evidence gaps",
+      "task_type": "proposal_drafting",
+      "collection": "PastPerformance",
+      "query": "Describe experience delivering FedRAMP-authorized cybersecurity modernization with 24/7 SOC operations, named CPARS ratings, and zero-trust implementation for a federal customer.",
+      "status": "PASS",
+      "overall_score": 0.8889,
+      "deterministic_scores": {
+        "expected_source_hit_rate": 1.0,
+        "expected_fact_coverage": 1.0,
+        "required_section_compliance": 1.0,
+        "missing_evidence_flag_compliance": 1.0,
+        "citation_presence": 0.0,
+        "not_found_handling": null,
+        "matched_expected_sources": [
+          "2023_DHS_CyberTransformation.md"
+        ],
+        "missing_expected_sources": [],
+        "matched_expected_facts": [
+          "FedRAMP High",
+          "zero-trust",
+          "cybersecurity modernization"
+        ],
+        "missing_expected_facts": [],
+        "matched_required_sections": [
+          "Coverage:"
+        ],
+        "missing_required_sections": [],
+        "matched_missing_evidence_flags": [
+          "CPARS",
+          "24/7 SOC operations"
+        ],
+        "missing_expected_missing_evidence_flags": [],
+        "unacceptable_claims_present": [],
+        "citation_present": false,
+        "not_found_detected": false
+      },
+      "judge_scores": {
+        "groundedness_score": 9,
+        "completeness_score": 7,
+        "citation_accuracy_score": 9,
+        "hallucination_risk": "Low",
+        "unsupported_claims": [],
+        "missing_elements": [
+          "24/7 SOC operations evidence - query required this but context does not support it",
+          "Named CPARS ratings - query explicitly asked for these but context contains none",
+          "Tier 1-3 analyst coverage details"
+        ],
+        "judge_notes": "The answer demonstrates excellent groundedness by accurately citing the 2023_DHS_CyberTransformation.md source for all factual claims including FedRAMP High authorization, zero-trust implementation across 6,200 endpoints, MTTD reduction metrics, and the COR quote. Critically, the answer properly flags missing evidence for 24/7 SOC operations and named CPARS ratings with explicit [EVIDENCE MISSING] markers rather than fabricating these details. This shows appropriate restraint given the context limitations. The Coverage section is present as required. However, completeness suffers because the query explicitly requested 24/7 SOC operations and named CPARS ratings which simply cannot be addressed from the retrieved context, making the answer inherently incomplete despite honest acknowledgment of gaps."
+      },
+      "retrieved_sources": [
+        "2023_DHS_CyberTransformation.md",
+        "2022_VA_DataAnalytics.md",
+        "2021_DoD_CloudMigration.md"
+      ],
+      "retrieved_items": [
+        {
+          "collection_name": "pastperformance",
+          "source_filename": "2023_DHS_CyberTransformation.md",
+          "file_path": "ConsultingKB/PastPerformance/2023_DHS_CyberTransformation.md",
+          "score": 0.67237407,
+          "content": "## Executive Summary\nDelivered a full-scale cybersecurity modernization for DHS's Office of the CISO, migrating 14 legacy security tools to a unified SIEM platform (Splunk Enterprise Security) and implementing zero-trust network architecture across 6,200 endpoints.\n\n## Key Accomplishments\n- Reduced mean time to detect (MTTD) incidents by 67% \u2014 from 22 hours to 7.2 hours\n- Achieved FedRAMP High authorization for cloud-hosted SOC environment in 11 months\n- Deployed automated threat-hunting playbooks covering 38 MITRE ATT&CK techniques\n- Trained 142 DHS security analysts on new tooling; 98% passed certification exam",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 1
+          }
+        },
+        {
+          "collection_name": "pastperformance",
+          "source_filename": "2023_DHS_CyberTransformation.md",
+          "file_path": "ConsultingKB/PastPerformance/2023_DHS_CyberTransformation.md",
+          "score": 0.616718,
+          "content": "## Relevance to Current Opportunity\nDirectly demonstrates our capability in large-scale federal cybersecurity modernization, FedRAMP authorization management, and enterprise SIEM deployment \u2014 all core requirements of the current solicitation.\n\n## COR Reference\nMarcus Webb | marcus.webb@hq.dhs.gov | (202) 555-0174\n\"The team delivered ahead of schedule and consistently exceeded quality metrics. Their zero-trust implementation became a model for other DHS components.\"",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 2
+          }
+        },
+        {
+          "collection_name": "pastperformance",
+          "source_filename": "2023_DHS_CyberTransformation.md",
+          "file_path": "ConsultingKB/PastPerformance/2023_DHS_CyberTransformation.md",
+          "score": 0.539652,
+          "content": "# DHS Cyber Transformation Program \u2014 Past Performance\n\n**Client:** Department of Homeland Security (DHS)\n**Contract Number:** HSHQDC-21-C-00412\n**Period of Performance:** March 2021 \u2013 February 2024\n**Contract Value:** $18.4M (CPFF)\n**Program Manager:** Sarah Chen, PMP",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 0
+          }
+        },
+        {
+          "collection_name": "pastperformance",
+          "source_filename": "2022_VA_DataAnalytics.md",
+          "file_path": "ConsultingKB/PastPerformance/2022_VA_DataAnalytics.md",
+          "score": 0.5257765,
+          "content": "## Executive Summary\nArchitected and built a cloud-native analytics platform on AWS GovCloud supporting 2,400 VA analysts. Platform ingests 4.2TB of veteran health and benefits data daily, enabling near-real-time dashboards for benefits processing, hospital capacity, and claims fraud detection.\n\n## Key Accomplishments\n- Reduced benefits processing report generation time from 3 days to 4 hours\n- Built ML fraud detection model achieving 91% precision on claims anomalies \u2014 flagged $14M in potentially fraudulent claims in first 6 months\n- Maintained 99.94% platform uptime across 18 months of operation\n- Delivered ATO within 8 months using continuous Authorization to Operate (cATO) approach",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 1
+          }
+        },
+        {
+          "collection_name": "pastperformance",
+          "source_filename": "2021_DoD_CloudMigration.md",
+          "file_path": "ConsultingKB/PastPerformance/2021_DoD_CloudMigration.md",
+          "score": 0.5141777,
+          "content": "## Executive Summary\nMigrated 47 mission-critical DoD applications from on-premises DISA data centers to Azure Government cloud, achieving IL4 and IL5 authorization for 12 of those applications. Delivered with zero unplanned downtime during migration windows.\n\n## Key Accomplishments\n- Completed all 47 app migrations on schedule (24-month program)\n- Achieved $2.1M annualized infrastructure cost savings post-migration\n- All 12 IL4/IL5 apps authorized within 6 months of migration\n- Developed reusable DevSecOps pipeline templates now used by 3 other DISA programs",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 1
+          }
+        },
+        {
+          "collection_name": "pastperformance",
+          "source_filename": "2021_DoD_CloudMigration.md",
+          "file_path": "ConsultingKB/PastPerformance/2021_DoD_CloudMigration.md",
+          "score": 0.45866847,
+          "content": "# DoD DISA Cloud Migration \u2014 Past Performance\n\n**Client:** Defense Information Systems Agency (DISA)\n**Contract Number:** HC1047-20-F-0082\n**Period of Performance:** January 2021 \u2013 December 2022\n**Contract Value:** $7.6M (FFP)\n**Program Manager:** Lt. Col. (Ret.) Brian Torres, PMP",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 0
+          }
+        },
+        {
+          "collection_name": "pastperformance",
+          "source_filename": "2022_VA_DataAnalytics.md",
+          "file_path": "ConsultingKB/PastPerformance/2022_VA_DataAnalytics.md",
+          "score": 0.45113808,
+          "content": "## Technologies Used\nAWS GovCloud (S3, Redshift, SageMaker, Lake Formation), Tableau, dbt, Apache Airflow, Python, Terraform\n\n## COR Reference\nDr. Priya Nair | priya.nair@va.gov | (202) 555-0291\n\"Exceptional technical depth and a true partner. Their ML fraud model alone justified the entire contract value.\"",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 2
+          }
+        },
+        {
+          "collection_name": "pastperformance",
+          "source_filename": "2021_DoD_CloudMigration.md",
+          "file_path": "ConsultingKB/PastPerformance/2021_DoD_CloudMigration.md",
+          "score": 0.40315375,
+          "content": "## COR Reference\nCol. Sandra Park | sandra.park@disa.mil | DSN 312-555-0183\n\"Best-in-class migration team. Their documentation and knowledge transfer left our team fully self-sufficient.\"",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 2
+          }
+        },
+        {
+          "collection_name": "pastperformance",
+          "source_filename": "2022_VA_DataAnalytics.md",
+          "file_path": "ConsultingKB/PastPerformance/2022_VA_DataAnalytics.md",
+          "score": 0.40129238,
+          "content": "# VA Enterprise Data Analytics Platform \u2014 Past Performance\n\n**Client:** Department of Veterans Affairs, Office of Data Governance\n**Contract Number:** VA118-21-D-0055 / Task Order 0003\n**Period of Performance:** July 2022 \u2013 Present (Option Year 2 active)\n**Contract Value:** $31.2M IDIQ; $9.8M task order\n**Program Manager:** James Okafor, PMP, CISSP",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 0
+          }
+        }
+      ],
+      "answer": "# Cybersecurity Modernization and Zero-Trust Implementation Experience\n\nOur organization brings demonstrated expertise in delivering FedRAMP-authorized cybersecurity modernization with zero-trust implementation for federal customers, as evidenced by our successful performance on the Department of Homeland Security Cyber Transformation Program (Contract No. HSHQDC-21-C-00412, $18.4M CPFF, March 2021 \u2013 February 2024). Under this engagement, we executed a full-scale cybersecurity modernization for DHS's Office of the CISO, migrating 14 legacy security tools to a unified SIEM platform using Splunk Enterprise Security and implementing zero-trust network architecture across 6,200 endpoints. This effort directly mirrors the modernization scope and zero-trust requirements outlined in the current solicitation.\n\nOur FedRAMP authorization management capabilities are proven through measurable outcomes on the DHS program. We achieved FedRAMP High authorization for the cloud-hosted Security Operations Center environment in 11 months, demonstrating our ability to navigate the rigorous authorization process while maintaining aggressive delivery schedules. The technical depth of our modernization approach is reflected in quantifiable performance improvements: we reduced mean time to detect (MTTD) incidents by 67 percent\u2014from 22 hours to 7.2 hours\u2014and deployed automated threat-hunting playbooks covering 38 MITRE ATT&CK techniques. Additionally, we trained 142 DHS security analysts on the new tooling, with 98 percent passing the certification exam, ensuring sustainable operational capability for the customer. [EVIDENCE MISSING: Documentation of 24/7 SOC operations capability, including staffing model, shift coverage, and continuous monitoring procedures.]\n\nThe quality of our cybersecurity modernization delivery is validated by our customer. COR Marcus Webb (marcus.webb@hq.dhs.gov, 202-555-0174) stated: \"The team delivered ahead of schedule and consistently exceeded quality metrics. Their zero-trust implementation became a model for other DHS components.\" This reference confirms both our schedule performance and the technical excellence of our zero-trust approach, which has been recognized as a benchmark within the broader DHS enterprise. [EVIDENCE MISSING: Named CPARS ratings (e.g., Exceptional, Very Good) for the DHS contract or other relevant cybersecurity engagements.]\n\nOur Program Manager for this effort, Sarah Chen, PMP, led the technical and management execution that produced these outcomes, and she remains available to support similar engagements requiring FedRAMP-authorized cybersecurity modernization and zero-trust implementation at enterprise scale.\n\nCoverage: FedRAMP High authorization (11 months), zero-trust implementation (6,200 endpoints), cybersecurity modernization scope, federal customer (DHS), COR reference with contact information, quantified performance metrics | Flagged: 24/7 SOC operations evidence, named CPARS ratings",
+      "warnings": [
+        "Judge flagged missing elements: 24/7 SOC operations evidence - query required this but context does not support it, Named CPARS ratings - query explicitly asked for these but context contains none, Tier 1-3 analyst coverage details"
+      ],
+      "failures": [],
+      "recommendations": [
+        "Use the judge's missing-elements feedback to strengthen prompt coverage for this task."
+      ],
+      "task_metadata": {}
+    },
+    {
+      "id": "gaps_data_mod_001",
+      "name": "Gap analysis for data modernization pursuit",
+      "task_type": "gap_analysis",
+      "collection": "TechnicalVolume",
+      "query": "Identify gaps relative to a pursuit requiring Section 508-compliant dashboards, FedRAMP High operations evidence, and named past performance references for data modernization.",
+      "status": "PASS",
+      "overall_score": 1.0,
+      "deterministic_scores": {
+        "expected_source_hit_rate": null,
+        "expected_fact_coverage": null,
+        "required_section_compliance": 1.0,
+        "missing_evidence_flag_compliance": null,
+        "citation_presence": null,
+        "not_found_handling": null,
+        "matched_expected_sources": [],
+        "missing_expected_sources": [],
+        "matched_expected_facts": [],
+        "missing_expected_facts": [],
+        "matched_required_sections": [
+          "Hard Gaps",
+          "Soft Gaps",
+          "Priority"
+        ],
+        "missing_required_sections": [],
+        "matched_missing_evidence_flags": [],
+        "missing_expected_missing_evidence_flags": [],
+        "unacceptable_claims_present": [],
+        "citation_present": false,
+        "not_found_detected": false
+      },
+      "judge_scores": {
+        "groundedness_score": 9,
+        "completeness_score": 9,
+        "citation_accuracy_score": 9,
+        "hallucination_risk": "Low",
+        "unsupported_claims": [
+          "The claim about needing 3-5 named contracts is reasonable guidance but not derived from context"
+        ],
+        "missing_elements": [
+          "Could have cited specific line numbers or sections more precisely",
+          "Could have quantified the gap severity more systematically"
+        ],
+        "judge_notes": "The answer is well-grounded in the retrieved context. It correctly identifies that the whitepaper mentions Section 508 only as a compliance pressure without implementation details, that FedRAMP is only referenced as a risk mitigation strategy without actual authorization evidence, and that past performance metrics are presented as averages without named contracts or verifiable references. The hard/soft gap distinction is logical and the priority recommendation is sound. All major claims trace back to actual context content or demonstrable absences therein. The answer appropriately avoids claiming anything is 'fully supported' or that there are 'no gaps' as instructed."
+      },
+      "retrieved_sources": [
+        "DataModernization_WhitePaper.md",
+        "TechnicalApproach_CyberSOC.md"
+      ],
+      "retrieved_items": [
+        {
+          "collection_name": "technicalvolume",
+          "source_filename": "DataModernization_WhitePaper.md",
+          "file_path": "ConsultingKB/TechnicalVolume/DataModernization_WhitePaper.md",
+          "score": 0.57871497,
+          "content": "## Abstract\nFederal agencies face mounting pressure to modernize aging data infrastructure while maintaining compliance with FISMA, Privacy Act, and Section 508. This whitepaper documents our proven 5-phase Data Modernization Framework, validated across 11 federal engagements totaling $127M in contract value.\n\n## Phase 1: Discovery & Inventory (Weeks 1\u20134)\nAutomated scanning of all data stores using our proprietary DataMapper tool. Output: enterprise data catalog with sensitivity classifications, lineage maps, and quality scores. Average discovery: 3,400 tables, 280 data owners identified.",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 1
+          }
+        },
+        {
+          "collection_name": "technicalvolume",
+          "source_filename": "DataModernization_WhitePaper.md",
+          "file_path": "ConsultingKB/TechnicalVolume/DataModernization_WhitePaper.md",
+          "score": 0.57871497,
+          "content": "## Abstract\nFederal agencies face mounting pressure to modernize aging data infrastructure while maintaining compliance with FISMA, Privacy Act, and Section 508. This whitepaper documents our proven 5-phase Data Modernization Framework, validated across 11 federal engagements totaling $127M in contract value.\n\n## Phase 1: Discovery & Inventory (Weeks 1\u20134)\nAutomated scanning of all data stores using our proprietary DataMapper tool. Output: enterprise data catalog with sensitivity classifications, lineage maps, and quality scores. Average discovery: 3,400 tables, 280 data owners identified.",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 1
+          }
+        },
+        {
+          "collection_name": "technicalvolume",
+          "source_filename": "DataModernization_WhitePaper.md",
+          "file_path": "ConsultingKB/TechnicalVolume/DataModernization_WhitePaper.md",
+          "score": 0.5368398,
+          "content": "# Data Modernization Whitepaper: Federal Agency Playbook\n\n**Authors:** Analytics Practice, Strategy & Innovation Group\n**Version:** 2.1 | February 2024",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 0
+          }
+        },
+        {
+          "collection_name": "technicalvolume",
+          "source_filename": "DataModernization_WhitePaper.md",
+          "file_path": "ConsultingKB/TechnicalVolume/DataModernization_WhitePaper.md",
+          "score": 0.5368398,
+          "content": "# Data Modernization Whitepaper: Federal Agency Playbook\n\n**Authors:** Analytics Practice, Strategy & Innovation Group\n**Version:** 2.1 | February 2024",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 0
+          }
+        },
+        {
+          "collection_name": "technicalvolume",
+          "source_filename": "DataModernization_WhitePaper.md",
+          "file_path": "ConsultingKB/TechnicalVolume/DataModernization_WhitePaper.md",
+          "score": 0.52517927,
+          "content": "## Phase 2: Architecture Blueprint (Weeks 5\u20138)\nDesign target-state architecture. For most agencies we recommend:\n- **Medallion architecture** on cloud (Bronze/Silver/Gold layers) for structured data\n- **Data mesh** governance model assigning domain ownership to business units\n- **Unified catalog** (AWS Glue or Purview) as single source of metadata truth\n\n## Phase 3: Pilot Migration (Weeks 9\u201316)\nMigrate highest-value, lowest-risk dataset first. Validate transformation logic, data quality rules, and access controls. Pilot success criteria: <0.01% error rate, stakeholder sign-off on 3 sample reports.",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 2
+          }
+        },
+        {
+          "collection_name": "technicalvolume",
+          "source_filename": "DataModernization_WhitePaper.md",
+          "file_path": "ConsultingKB/TechnicalVolume/DataModernization_WhitePaper.md",
+          "score": 0.52517927,
+          "content": "## Phase 2: Architecture Blueprint (Weeks 5\u20138)\nDesign target-state architecture. For most agencies we recommend:\n- **Medallion architecture** on cloud (Bronze/Silver/Gold layers) for structured data\n- **Data mesh** governance model assigning domain ownership to business units\n- **Unified catalog** (AWS Glue or Purview) as single source of metadata truth\n\n## Phase 3: Pilot Migration (Weeks 9\u201316)\nMigrate highest-value, lowest-risk dataset first. Validate transformation logic, data quality rules, and access controls. Pilot success criteria: <0.01% error rate, stakeholder sign-off on 3 sample reports.",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 2
+          }
+        },
+        {
+          "collection_name": "technicalvolume",
+          "source_filename": "TechnicalApproach_CyberSOC.md",
+          "file_path": "ConsultingKB/TechnicalVolume/TechnicalApproach_CyberSOC.md",
+          "score": 0.4947663,
+          "content": "## 3. Staffing\n- 1 Program Manager (onsite, 100%)\n- 2 Senior Splunk Architects (onsite, 100%)\n- 4 SOC Analysts Tier 1/2 (onsite, 100%, rotating shifts)\n- 1 Threat Intelligence Analyst (remote, 100%)\n- 1 Data Scientist \u2013 UEBA (remote, 50%)\n\n## 4. Risk Mitigation\n| Risk | Probability | Impact | Mitigation |\n|------|-------------|--------|------------|\n| Log source ingestion delays | Medium | High | Pre-engagement discovery call; parser library of 340+ connectors |\n| Analyst training resistance | Low | Medium | Gamified training portal; champion program with incentive badges |\n| FedRAMP timeline slip | Medium | High | Leverage existing FedRAMP package; only delta controls needed |",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 4
+          }
+        },
+        {
+          "collection_name": "technicalvolume",
+          "source_filename": "TechnicalApproach_CyberSOC.md",
+          "file_path": "ConsultingKB/TechnicalVolume/TechnicalApproach_CyberSOC.md",
+          "score": 0.47568053,
+          "content": "# Technical Approach \u2014 Cyber SOC Modernization RFP\n\n**Solicitation:** HQ-2024-SOC-0041\n**Prepared by:** Solutions Architecture Team\n**Date:** March 2024",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 0
+          }
+        },
+        {
+          "collection_name": "technicalvolume",
+          "source_filename": "TechnicalApproach_CyberSOC.md",
+          "file_path": "ConsultingKB/TechnicalVolume/TechnicalApproach_CyberSOC.md",
+          "score": 0.46938798,
+          "content": "### 2.2 AI/ML Threat Detection\n- Behavioral baselines for all 8,400 user accounts using UEBA models trained on 90-day activity window\n- Anomaly detection triggering on >3\u03c3 deviation from individual user baseline\n- Custom NLP model classifying phishing emails with 96.3% accuracy (validated on 18-month DHS corpus)\n\n### 2.3 Migration Plan\nPhase 1 (Months 1\u20133): Deploy Splunk ES in parallel; begin log source onboarding\nPhase 2 (Months 4\u20136): Migrate all 9 legacy tools; validate data parity\nPhase 3 (Months 7\u20139): Enable SOAR playbooks; conduct analyst training\nPhase 4 (Month 10+): Full operations; legacy tool decommission",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 3
+          }
+        },
+        {
+          "collection_name": "technicalvolume",
+          "source_filename": "DataModernization_WhitePaper.md",
+          "file_path": "ConsultingKB/TechnicalVolume/DataModernization_WhitePaper.md",
+          "score": 0.46504524,
+          "content": "## Key Metrics from Past Engagements\n- Average data quality improvement: 34% reduction in null/anomalous values\n- Average query performance improvement: 8\u00d7 faster on analytical workloads\n- Average storage cost reduction: 41% through compression and tiering",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 4
+          }
+        },
+        {
+          "collection_name": "technicalvolume",
+          "source_filename": "DataModernization_WhitePaper.md",
+          "file_path": "ConsultingKB/TechnicalVolume/DataModernization_WhitePaper.md",
+          "score": 0.46504524,
+          "content": "## Key Metrics from Past Engagements\n- Average data quality improvement: 34% reduction in null/anomalous values\n- Average query performance improvement: 8\u00d7 faster on analytical workloads\n- Average storage cost reduction: 41% through compression and tiering",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 4
+          }
+        },
+        {
+          "collection_name": "technicalvolume",
+          "source_filename": "TechnicalApproach_CyberSOC.md",
+          "file_path": "ConsultingKB/TechnicalVolume/TechnicalApproach_CyberSOC.md",
+          "score": 0.4496228,
+          "content": "## 1. Understanding of the Requirement\nThe Government seeks to modernize its Security Operations Center (SOC) by consolidating 9 disparate security tools into a unified platform, achieving 24/7 Tier 1\u20133 analyst coverage, and implementing AI-assisted threat detection to reduce analyst fatigue.\n\n## 2. Technical Solution",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 1
+          }
+        },
+        {
+          "collection_name": "technicalvolume",
+          "source_filename": "DataModernization_WhitePaper.md",
+          "file_path": "ConsultingKB/TechnicalVolume/DataModernization_WhitePaper.md",
+          "score": 0.39819145,
+          "content": "## Phase 4: Scaled Migration (Months 4\u201312)\nParallel migration tracks (max 3 concurrent). Each track: extract \u2192 transform \u2192 load \u2192 validate \u2192 cut over. Average migration velocity: 180 tables/month.\n\n## Phase 5: Operate & Optimize (Ongoing)\nDataOps team monitors pipeline health, query performance, and cost. SLA: 99.9% pipeline availability; <4hr P1 incident response.",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 3
+          }
+        },
+        {
+          "collection_name": "technicalvolume",
+          "source_filename": "DataModernization_WhitePaper.md",
+          "file_path": "ConsultingKB/TechnicalVolume/DataModernization_WhitePaper.md",
+          "score": 0.39819145,
+          "content": "## Phase 4: Scaled Migration (Months 4\u201312)\nParallel migration tracks (max 3 concurrent). Each track: extract \u2192 transform \u2192 load \u2192 validate \u2192 cut over. Average migration velocity: 180 tables/month.\n\n## Phase 5: Operate & Optimize (Ongoing)\nDataOps team monitors pipeline health, query performance, and cost. SLA: 99.9% pipeline availability; <4hr P1 incident response.",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 3
+          }
+        },
+        {
+          "collection_name": "technicalvolume",
+          "source_filename": "TechnicalApproach_CyberSOC.md",
+          "file_path": "ConsultingKB/TechnicalVolume/TechnicalApproach_CyberSOC.md",
+          "score": 0.38206887,
+          "content": "### 2.1 Platform Architecture\nWe propose a three-tier SOC architecture:\n- **Tier 1 \u2013 Automated Triage**: Splunk SOAR playbooks auto-triage and close ~60% of Level 1 alerts without analyst intervention\n- **Tier 2 \u2013 Analyst Workbench**: Unified analyst console with risk-scored alert queue, integrated threat intel feeds (FS-ISAC, CISA KEV, Mandiant Advantage)\n- **Tier 3 \u2013 Threat Hunting**: Dedicated hunt team using Jupyter notebooks connected to Splunk raw data lake; 40 hours/week proactive hunting",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 2
+          }
+        }
+      ],
+      "answer": "**Hard Gaps**\n\u2022 No named past performance references: The content mentions \"11 federal engagements totaling $127M\" but provides zero specific contract names, agency names, contract numbers, or COR/CO contact information. Need: Past performance volume with 3-5 named contracts including agency, contract number, period of performance, value, and reference contact details.\n\u2022 No FedRAMP High operations evidence: Only mention is \"Leverage existing FedRAMP package\" as a risk mitigation with no evidence of actual FedRAMP High authorization, continuous monitoring artifacts, or POA&M management history. Need: FedRAMP High ATO documentation, ConMon reports, or case study demonstrating FedRAMP High environment operations.\n\u2022 No Section 508 compliance implementation evidence: Section 508 is mentioned only once as a compliance pressure agencies face\u2014zero detail on how dashboards or deliverables achieve WCAG 2.1 AA conformance, accessibility testing processes, or VPAT documentation. Need: Section 508 compliance methodology document, sample VPAT, or accessibility testing artifacts for analytics/dashboard deliverables.\n\n**Soft Gaps**\n\u2022 No customer quotes or testimonials: Metrics are provided (34% quality improvement, 8\u00d7 query performance) but no COR/CO quotes validating satisfaction or outcomes. Need: Documented customer feedback, award fee scores, or formal commendation letters.\n\u2022 Data modernization metrics lack contract attribution: Metrics are presented as averages across engagements with no traceability to specific contracts a CO could verify. Need: Contract-specific metrics tied to named past performance.\n\u2022 No accessibility-specific staffing or expertise identified: Staffing tables list technical roles but no 508 SME, accessibility tester, or UX accessibility specialist. Need: Resume or role description for Section 508/accessibility expertise.\n\u2022 Cloud authorization specifics thin: AWS Glue and Purview mentioned as catalog options but no IL level, GovCloud, or authorization boundary details relevant to FedRAMP High data handling. Need: Cloud environment authorization details and boundary documentation.\n\n**Priority**\nAddress the complete absence of named past performance references first\u2014evaluators cannot score past performance without verifiable contract details and CO contacts.",
+      "warnings": [
+        "Judge flagged unsupported claims: The claim about needing 3-5 named contracts is reasonable guidance but not derived from context",
+        "Judge flagged missing elements: Could have cited specific line numbers or sections more precisely, Could have quantified the gap severity more systematically"
+      ],
+      "failures": [],
+      "recommendations": [
+        "Use the judge's missing-elements feedback to strengthen prompt coverage for this task.",
+        "Remove or constrain unsupported answer claims identified by the judge."
+      ],
+      "task_metadata": {}
+    },
+    {
+      "id": "compare_soc_001",
+      "name": "Compare past performance vs technical approach for SOC modernization",
+      "task_type": "collection_compare",
+      "collection": "PastPerformance",
+      "query": "Compare which collection provides stronger evidence for a federal SOC modernization bid requiring FedRAMP High, zero-trust implementation, and AI-assisted threat detection.",
+      "status": "PASS",
+      "overall_score": 1.0,
+      "deterministic_scores": {
+        "expected_source_hit_rate": 1.0,
+        "expected_fact_coverage": 1.0,
+        "required_section_compliance": 1.0,
+        "missing_evidence_flag_compliance": null,
+        "citation_presence": 1.0,
+        "not_found_handling": null,
+        "matched_expected_sources": [
+          "2023_DHS_CyberTransformation.md",
+          "TechnicalApproach_CyberSOC.md"
+        ],
+        "missing_expected_sources": [],
+        "matched_expected_facts": [
+          "FedRAMP High",
+          "zero-trust",
+          "AI-assisted threat detection"
+        ],
+        "missing_expected_facts": [],
+        "matched_required_sections": [
+          "DIRECT ANSWER",
+          "Complementary Strengths",
+          "Divergences",
+          "Bottom Line"
+        ],
+        "missing_required_sections": [],
+        "matched_missing_evidence_flags": [],
+        "missing_expected_missing_evidence_flags": [],
+        "unacceptable_claims_present": [],
+        "citation_present": true,
+        "not_found_detected": false
+      },
+      "judge_scores": null,
+      "retrieved_sources": [
+        "2023_DHS_CyberTransformation.md",
+        "2022_VA_DataAnalytics.md",
+        "2021_DoD_CloudMigration.md",
+        "TechnicalApproach_CyberSOC.md",
+        "DataModernization_WhitePaper.md"
+      ],
+      "retrieved_items": [
+        {
+          "collection_name": "pastperformance",
+          "source_filename": "2023_DHS_CyberTransformation.md",
+          "file_path": "ConsultingKB/PastPerformance/2023_DHS_CyberTransformation.md",
+          "score": 0.5531342,
+          "content": "## Relevance to Current Opportunity\nDirectly demonstrates our capability in large-scale federal cybersecurity modernization, FedRAMP authorization management, and enterprise SIEM deployment \u2014 all core requirements of the current solicitation.\n\n## COR Reference\nMarcus Webb | marcus.webb@hq.dhs.gov | (202) 555-0174\n\"The team delivered ahead of schedule and consistently exceeded quality metrics. Their zero-trust implementation became a model for other DHS components.\"",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 2
+          }
+        },
+        {
+          "collection_name": "pastperformance",
+          "source_filename": "2023_DHS_CyberTransformation.md",
+          "file_path": "ConsultingKB/PastPerformance/2023_DHS_CyberTransformation.md",
+          "score": 0.5103985,
+          "content": "## Executive Summary\nDelivered a full-scale cybersecurity modernization for DHS's Office of the CISO, migrating 14 legacy security tools to a unified SIEM platform (Splunk Enterprise Security) and implementing zero-trust network architecture across 6,200 endpoints.\n\n## Key Accomplishments\n- Reduced mean time to detect (MTTD) incidents by 67% \u2014 from 22 hours to 7.2 hours\n- Achieved FedRAMP High authorization for cloud-hosted SOC environment in 11 months\n- Deployed automated threat-hunting playbooks covering 38 MITRE ATT&CK techniques\n- Trained 142 DHS security analysts on new tooling; 98% passed certification exam",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 1
+          }
+        },
+        {
+          "collection_name": "pastperformance",
+          "source_filename": "2023_DHS_CyberTransformation.md",
+          "file_path": "ConsultingKB/PastPerformance/2023_DHS_CyberTransformation.md",
+          "score": 0.42132378,
+          "content": "# DHS Cyber Transformation Program \u2014 Past Performance\n\n**Client:** Department of Homeland Security (DHS)\n**Contract Number:** HSHQDC-21-C-00412\n**Period of Performance:** March 2021 \u2013 February 2024\n**Contract Value:** $18.4M (CPFF)\n**Program Manager:** Sarah Chen, PMP",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 0
+          }
+        },
+        {
+          "collection_name": "pastperformance",
+          "source_filename": "2022_VA_DataAnalytics.md",
+          "file_path": "ConsultingKB/PastPerformance/2022_VA_DataAnalytics.md",
+          "score": 0.4022192,
+          "content": "## Executive Summary\nArchitected and built a cloud-native analytics platform on AWS GovCloud supporting 2,400 VA analysts. Platform ingests 4.2TB of veteran health and benefits data daily, enabling near-real-time dashboards for benefits processing, hospital capacity, and claims fraud detection.\n\n## Key Accomplishments\n- Reduced benefits processing report generation time from 3 days to 4 hours\n- Built ML fraud detection model achieving 91% precision on claims anomalies \u2014 flagged $14M in potentially fraudulent claims in first 6 months\n- Maintained 99.94% platform uptime across 18 months of operation\n- Delivered ATO within 8 months using continuous Authorization to Operate (cATO) approach",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 1
+          }
+        },
+        {
+          "collection_name": "pastperformance",
+          "source_filename": "2021_DoD_CloudMigration.md",
+          "file_path": "ConsultingKB/PastPerformance/2021_DoD_CloudMigration.md",
+          "score": 0.39501134,
+          "content": "# DoD DISA Cloud Migration \u2014 Past Performance\n\n**Client:** Defense Information Systems Agency (DISA)\n**Contract Number:** HC1047-20-F-0082\n**Period of Performance:** January 2021 \u2013 December 2022\n**Contract Value:** $7.6M (FFP)\n**Program Manager:** Lt. Col. (Ret.) Brian Torres, PMP",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 0
+          }
+        },
+        {
+          "collection_name": "pastperformance",
+          "source_filename": "2022_VA_DataAnalytics.md",
+          "file_path": "ConsultingKB/PastPerformance/2022_VA_DataAnalytics.md",
+          "score": 0.39197093,
+          "content": "## Technologies Used\nAWS GovCloud (S3, Redshift, SageMaker, Lake Formation), Tableau, dbt, Apache Airflow, Python, Terraform\n\n## COR Reference\nDr. Priya Nair | priya.nair@va.gov | (202) 555-0291\n\"Exceptional technical depth and a true partner. Their ML fraud model alone justified the entire contract value.\"",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 2
+          }
+        },
+        {
+          "collection_name": "pastperformance",
+          "source_filename": "2021_DoD_CloudMigration.md",
+          "file_path": "ConsultingKB/PastPerformance/2021_DoD_CloudMigration.md",
+          "score": 0.37170064,
+          "content": "## Executive Summary\nMigrated 47 mission-critical DoD applications from on-premises DISA data centers to Azure Government cloud, achieving IL4 and IL5 authorization for 12 of those applications. Delivered with zero unplanned downtime during migration windows.\n\n## Key Accomplishments\n- Completed all 47 app migrations on schedule (24-month program)\n- Achieved $2.1M annualized infrastructure cost savings post-migration\n- All 12 IL4/IL5 apps authorized within 6 months of migration\n- Developed reusable DevSecOps pipeline templates now used by 3 other DISA programs",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 1
+          }
+        },
+        {
+          "collection_name": "pastperformance",
+          "source_filename": "2022_VA_DataAnalytics.md",
+          "file_path": "ConsultingKB/PastPerformance/2022_VA_DataAnalytics.md",
+          "score": 0.35040438,
+          "content": "# VA Enterprise Data Analytics Platform \u2014 Past Performance\n\n**Client:** Department of Veterans Affairs, Office of Data Governance\n**Contract Number:** VA118-21-D-0055 / Task Order 0003\n**Period of Performance:** July 2022 \u2013 Present (Option Year 2 active)\n**Contract Value:** $31.2M IDIQ; $9.8M task order\n**Program Manager:** James Okafor, PMP, CISSP",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 0
+          }
+        },
+        {
+          "collection_name": "pastperformance",
+          "source_filename": "2021_DoD_CloudMigration.md",
+          "file_path": "ConsultingKB/PastPerformance/2021_DoD_CloudMigration.md",
+          "score": 0.30084002,
+          "content": "## COR Reference\nCol. Sandra Park | sandra.park@disa.mil | DSN 312-555-0183\n\"Best-in-class migration team. Their documentation and knowledge transfer left our team fully self-sufficient.\"",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 2
+          }
+        },
+        {
+          "collection_name": "technicalvolume",
+          "source_filename": "TechnicalApproach_CyberSOC.md",
+          "file_path": "ConsultingKB/TechnicalVolume/TechnicalApproach_CyberSOC.md",
+          "score": 0.53005904,
+          "content": "## 1. Understanding of the Requirement\nThe Government seeks to modernize its Security Operations Center (SOC) by consolidating 9 disparate security tools into a unified platform, achieving 24/7 Tier 1\u20133 analyst coverage, and implementing AI-assisted threat detection to reduce analyst fatigue.\n\n## 2. Technical Solution",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 1
+          }
+        },
+        {
+          "collection_name": "technicalvolume",
+          "source_filename": "TechnicalApproach_CyberSOC.md",
+          "file_path": "ConsultingKB/TechnicalVolume/TechnicalApproach_CyberSOC.md",
+          "score": 0.5216878,
+          "content": "# Technical Approach \u2014 Cyber SOC Modernization RFP\n\n**Solicitation:** HQ-2024-SOC-0041\n**Prepared by:** Solutions Architecture Team\n**Date:** March 2024",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 0
+          }
+        },
+        {
+          "collection_name": "technicalvolume",
+          "source_filename": "TechnicalApproach_CyberSOC.md",
+          "file_path": "ConsultingKB/TechnicalVolume/TechnicalApproach_CyberSOC.md",
+          "score": 0.49694037,
+          "content": "## 3. Staffing\n- 1 Program Manager (onsite, 100%)\n- 2 Senior Splunk Architects (onsite, 100%)\n- 4 SOC Analysts Tier 1/2 (onsite, 100%, rotating shifts)\n- 1 Threat Intelligence Analyst (remote, 100%)\n- 1 Data Scientist \u2013 UEBA (remote, 50%)\n\n## 4. Risk Mitigation\n| Risk | Probability | Impact | Mitigation |\n|------|-------------|--------|------------|\n| Log source ingestion delays | Medium | High | Pre-engagement discovery call; parser library of 340+ connectors |\n| Analyst training resistance | Low | Medium | Gamified training portal; champion program with incentive badges |\n| FedRAMP timeline slip | Medium | High | Leverage existing FedRAMP package; only delta controls needed |",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 4
+          }
+        },
+        {
+          "collection_name": "technicalvolume",
+          "source_filename": "TechnicalApproach_CyberSOC.md",
+          "file_path": "ConsultingKB/TechnicalVolume/TechnicalApproach_CyberSOC.md",
+          "score": 0.45085347,
+          "content": "### 2.2 AI/ML Threat Detection\n- Behavioral baselines for all 8,400 user accounts using UEBA models trained on 90-day activity window\n- Anomaly detection triggering on >3\u03c3 deviation from individual user baseline\n- Custom NLP model classifying phishing emails with 96.3% accuracy (validated on 18-month DHS corpus)\n\n### 2.3 Migration Plan\nPhase 1 (Months 1\u20133): Deploy Splunk ES in parallel; begin log source onboarding\nPhase 2 (Months 4\u20136): Migrate all 9 legacy tools; validate data parity\nPhase 3 (Months 7\u20139): Enable SOAR playbooks; conduct analyst training\nPhase 4 (Month 10+): Full operations; legacy tool decommission",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 3
+          }
+        },
+        {
+          "collection_name": "technicalvolume",
+          "source_filename": "TechnicalApproach_CyberSOC.md",
+          "file_path": "ConsultingKB/TechnicalVolume/TechnicalApproach_CyberSOC.md",
+          "score": 0.44770667,
+          "content": "### 2.1 Platform Architecture\nWe propose a three-tier SOC architecture:\n- **Tier 1 \u2013 Automated Triage**: Splunk SOAR playbooks auto-triage and close ~60% of Level 1 alerts without analyst intervention\n- **Tier 2 \u2013 Analyst Workbench**: Unified analyst console with risk-scored alert queue, integrated threat intel feeds (FS-ISAC, CISA KEV, Mandiant Advantage)\n- **Tier 3 \u2013 Threat Hunting**: Dedicated hunt team using Jupyter notebooks connected to Splunk raw data lake; 40 hours/week proactive hunting",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 2
+          }
+        },
+        {
+          "collection_name": "technicalvolume",
+          "source_filename": "DataModernization_WhitePaper.md",
+          "file_path": "ConsultingKB/TechnicalVolume/DataModernization_WhitePaper.md",
+          "score": 0.4372704,
+          "content": "## Abstract\nFederal agencies face mounting pressure to modernize aging data infrastructure while maintaining compliance with FISMA, Privacy Act, and Section 508. This whitepaper documents our proven 5-phase Data Modernization Framework, validated across 11 federal engagements totaling $127M in contract value.\n\n## Phase 1: Discovery & Inventory (Weeks 1\u20134)\nAutomated scanning of all data stores using our proprietary DataMapper tool. Output: enterprise data catalog with sensitivity classifications, lineage maps, and quality scores. Average discovery: 3,400 tables, 280 data owners identified.",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 1
+          }
+        },
+        {
+          "collection_name": "technicalvolume",
+          "source_filename": "DataModernization_WhitePaper.md",
+          "file_path": "ConsultingKB/TechnicalVolume/DataModernization_WhitePaper.md",
+          "score": 0.4372704,
+          "content": "## Abstract\nFederal agencies face mounting pressure to modernize aging data infrastructure while maintaining compliance with FISMA, Privacy Act, and Section 508. This whitepaper documents our proven 5-phase Data Modernization Framework, validated across 11 federal engagements totaling $127M in contract value.\n\n## Phase 1: Discovery & Inventory (Weeks 1\u20134)\nAutomated scanning of all data stores using our proprietary DataMapper tool. Output: enterprise data catalog with sensitivity classifications, lineage maps, and quality scores. Average discovery: 3,400 tables, 280 data owners identified.",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 1
+          }
+        },
+        {
+          "collection_name": "technicalvolume",
+          "source_filename": "DataModernization_WhitePaper.md",
+          "file_path": "ConsultingKB/TechnicalVolume/DataModernization_WhitePaper.md",
+          "score": 0.42861348,
+          "content": "# Data Modernization Whitepaper: Federal Agency Playbook\n\n**Authors:** Analytics Practice, Strategy & Innovation Group\n**Version:** 2.1 | February 2024",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 0
+          }
+        },
+        {
+          "collection_name": "technicalvolume",
+          "source_filename": "DataModernization_WhitePaper.md",
+          "file_path": "ConsultingKB/TechnicalVolume/DataModernization_WhitePaper.md",
+          "score": 0.42861348,
+          "content": "# Data Modernization Whitepaper: Federal Agency Playbook\n\n**Authors:** Analytics Practice, Strategy & Innovation Group\n**Version:** 2.1 | February 2024",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 0
+          }
+        },
+        {
+          "collection_name": "technicalvolume",
+          "source_filename": "DataModernization_WhitePaper.md",
+          "file_path": "ConsultingKB/TechnicalVolume/DataModernization_WhitePaper.md",
+          "score": 0.3879035,
+          "content": "## Phase 2: Architecture Blueprint (Weeks 5\u20138)\nDesign target-state architecture. For most agencies we recommend:\n- **Medallion architecture** on cloud (Bronze/Silver/Gold layers) for structured data\n- **Data mesh** governance model assigning domain ownership to business units\n- **Unified catalog** (AWS Glue or Purview) as single source of metadata truth\n\n## Phase 3: Pilot Migration (Weeks 9\u201316)\nMigrate highest-value, lowest-risk dataset first. Validate transformation logic, data quality rules, and access controls. Pilot success criteria: <0.01% error rate, stakeholder sign-off on 3 sample reports.",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 2
+          }
+        }
+      ],
+      "answer": "DIRECT ANSWER\nPastPerformance provides stronger demonstrated evidence for FedRAMP High authorization and zero-trust implementation through completed federal contracts, while TechnicalVolume provides stronger technical specificity for AI-assisted threat detection capabilities\u2014together they form complementary bid evidence, but PastPerformance offers the proven delivery track record evaluators typically weight most heavily.\n\n**Comparison Table**\n| Dimension | PastPerformance | TechnicalVolume |\n| --- | --- | --- |\n| **FedRAMP High Authorization** | Achieved FedRAMP High authorization for cloud-hosted SOC environment in 11 months at DHS (2023_DHS_CyberTransformation.md) | Acknowledges FedRAMP timeline risk; proposes leveraging \"existing FedRAMP package; only delta controls needed\" but no demonstrated authorization (TechnicalApproach_CyberSOC.md) |\n| **Zero-Trust Implementation** | Implemented zero-trust network architecture across 6,200 endpoints; COR stated it \"became a model for other DHS components\" (2023_DHS_CyberTransformation.md) | No zero-trust approach described; architecture focuses on SOC tiers and SOAR automation (TechnicalApproach_CyberSOC.md) |\n| **AI-Assisted Threat Detection** | Deployed automated threat-hunting playbooks covering 38 MITRE ATT&CK techniques; ML fraud detection model achieved 91% precision at VA (2023_DHS_CyberTransformation.md; 2022_VA_DataAnalytics.md) | Detailed UEBA models with 90-day behavioral baselines, 3\u03c3 anomaly detection, NLP phishing classifier with 96.3% accuracy validated on 18-month DHS corpus (TechnicalApproach_CyberSOC.md) |\n| **SOC Modernization Scope** | Migrated 14 legacy security tools to unified Splunk Enterprise Security; reduced MTTD by 67% (22 hours \u2192 7.2 hours) (2023_DHS_CyberTransformation.md) | Proposes consolidating 9 disparate tools; Tier 1 SOAR playbooks to auto-close ~60% of alerts; phased 10-month migration plan (TechnicalApproach_CyberSOC.md) |\n| **Federal Security Authorization Experience** | IL4/IL5 authorization for 12 DoD apps within 6 months; ATO achieved in 8 months using cATO approach at VA (2021_DoD_CloudMigration.md; 2022_VA_DataAnalytics.md) | Risk mitigation acknowledges FedRAMP timeline slip as Medium probability/High impact (TechnicalApproach_CyberSOC.md) |\n\n**Complementary Strengths**\n\u2022 **Splunk platform continuity**: PastPerformance proves successful Splunk ES deployment and analyst training (142 trained, 98% certification pass rate), while TechnicalVolume proposes Splunk ES architecture with SOAR playbooks\u2014demonstrating both capability and intent to replicate proven approach (2023_DHS_CyberTransformation.md; TechnicalApproach_CyberSOC.md)\n\u2022 **ML/AI credibility chain**: VA fraud detection (91% precision, $14M flagged) validates the technical feasibility of the proposed UEBA and NLP models (96.3% accuracy)\u2014past success de-risks forward-looking AI claims (2022_VA_DataAnalytics.md; TechnicalApproach_CyberSOC.md)\n\u2022 **Phased migration methodology**: DoD migration of 47 apps with zero unplanned downtime substantiates the proposed 4-phase SOC migration plan's feasibility (2021_DoD_CloudMigration.md; TechnicalApproach_CyberSOC.md)\n\n**Divergences**\n\u2022 **Zero-trust gap in TechnicalVolume**: PastPerformance highlights zero-trust as a signature accomplishment; TechnicalVolume contains no zero-trust architecture or methodology, leaving a critical RFP requirement unaddressed in the proposed solution (2023_DHS_CyberTransformation.md vs. TechnicalApproach_CyberSOC.md)\n\u2022 **Evidence type differs**: PastPerformance provides verified outcomes with COR quotes and contract values ($18.4M, $31.2M IDIQ); TechnicalVolume provides forward-looking design without third-party validation of claims like \"96.3% accuracy\" beyond internal testing (2023_DHS_CyberTransformation.md; TechnicalApproach_CyberSOC.md)\n\u2022 **AI specificity inverts**: TechnicalVolume provides more granular AI/ML technical detail (UEBA baselines, \u03c3 thresholds, NLP architecture) than PastPerformance, which describes outcomes without algorithmic specifics (TechnicalApproach_CyberSOC.md)\n\n**Bottom Line**\nFor a federal SOC modernization bid requiring all three capabilities, **PastPerformance is the stronger evidence source for FedRAMP High and zero-trust**\u2014these are the hardest-to-replicate differentiators, backed by named CORs and measurable outcomes. TechnicalVolume adds essential AI/ML technical depth that PastPerformance lacks in specificity, but proposes no zero-trust approach, creating a gap the proposal team must address. The winning bid strategy should lead with the DHS Cyber Transformation past performance ($18.4M, 11-month FedRAMP High, zero-trust model) as the primary relevance proof, while incorporating the TechnicalVolume's UEBA and NLP specifications to demonstrate AI-assisted threat detection maturity. Critical action: update TechnicalApproach_CyberSOC.md to include zero-trust architecture leveraging the DHS-validated approach.",
+      "warnings": [
+        "Judge evaluation failed: Extra data: line 2 column 1 (char 1153)"
+      ],
+      "failures": [],
+      "recommendations": [],
+      "task_metadata": {
+        "sources_a": [
+          "2023_DHS_CyberTransformation.md",
+          "2022_VA_DataAnalytics.md",
+          "2021_DoD_CloudMigration.md"
+        ],
+        "sources_b": [
+          "TechnicalApproach_CyberSOC.md",
+          "DataModernization_WhitePaper.md"
+        ],
+        "overlap_files": [],
+        "collection_a": "pastperformance",
+        "collection_b": "technicalvolume"
+      }
+    },
+    {
+      "id": "resume_pm_001",
+      "name": "PM resume grounding check",
+      "task_type": "question_answering",
+      "collection": "Resumes",
+      "query": "Which resume best supports a program manager role for a DHS cybersecurity modernization effort with FedRAMP and zero-trust experience?",
+      "status": "PASS",
+      "overall_score": 1.0,
+      "deterministic_scores": {
+        "expected_source_hit_rate": 1.0,
+        "expected_fact_coverage": 1.0,
+        "required_section_compliance": null,
+        "missing_evidence_flag_compliance": null,
+        "citation_presence": 1.0,
+        "not_found_handling": null,
+        "matched_expected_sources": [
+          "Sarah_Chen_PM.md"
+        ],
+        "missing_expected_sources": [],
+        "matched_expected_facts": [
+          "Sarah Chen",
+          "Top Secret/SCI",
+          "FedRAMP",
+          "zero-trust",
+          "DHS Cyber Transformation Program"
+        ],
+        "missing_expected_facts": [],
+        "matched_required_sections": [],
+        "missing_required_sections": [],
+        "matched_missing_evidence_flags": [],
+        "missing_expected_missing_evidence_flags": [],
+        "unacceptable_claims_present": [],
+        "citation_present": true,
+        "not_found_detected": false
+      },
+      "judge_scores": {
+        "groundedness_score": 10,
+        "completeness_score": 9,
+        "citation_accuracy_score": 10,
+        "hallucination_risk": "Low",
+        "unsupported_claims": [],
+        "missing_elements": [
+          "Could have mentioned Sarah Chen's SAFe certification as relevant for program management"
+        ],
+        "judge_notes": "The answer is fully grounded in the retrieved context. All claims about Sarah Chen (DHS Cyber Transformation Program, FedRAMP High ATO, zero-trust implementation, Top Secret/SCI clearance, PMP/CISSP, 14 years experience, 6 programs with 100% on-time delivery) are directly supported by Sarah_Chen_PM.md. The characterization of James Okafor as a data engineer rather than program manager is accurate based on James_Okafor_DataEngineer.md. The answer correctly avoids the unacceptable claims and addresses all expected facts. Citations are accurate and appropriately attributed."
+      },
+      "retrieved_sources": [
+        "Sarah_Chen_PM.md",
+        "James_Okafor_DataEngineer.md"
+      ],
+      "retrieved_items": [
+        {
+          "collection_name": "resumes",
+          "source_filename": "Sarah_Chen_PM.md",
+          "file_path": "ConsultingKB/Resumes/Sarah_Chen_PM.md",
+          "score": 0.63667035,
+          "content": "**DHS Cyber Transformation Program** (2021\u20132024) | $18.4M\nProgram Manager. Led 12-person team delivering enterprise SIEM and zero-trust implementation. Achieved FedRAMP High ATO 2 months ahead of schedule.\n\n**DoD DISA Cloud Migration** (2021\u20132022) | $7.6M\nProgram Manager. Migrated 47 applications to Azure Government with zero unplanned downtime. Delivered $2.1M annualized cost savings.",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 2
+          }
+        },
+        {
+          "collection_name": "resumes",
+          "source_filename": "Sarah_Chen_PM.md",
+          "file_path": "ConsultingKB/Resumes/Sarah_Chen_PM.md",
+          "score": 0.58487564,
+          "content": "# Sarah Chen, PMP, CISSP\n**Title:** Senior Program Manager  \n**Clearance:** Top Secret/SCI  \n**Years of Experience:** 14\n\n## Summary\nSeasoned federal IT program manager with 14 years delivering cybersecurity and cloud modernization programs for DHS, DoD, and VA. Consistent record of on-time, on-budget delivery. Expert in Agile/SAFe delivery, risk management, and senior stakeholder engagement at SES level and above.",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 0
+          }
+        },
+        {
+          "collection_name": "resumes",
+          "source_filename": "Sarah_Chen_PM.md",
+          "file_path": "ConsultingKB/Resumes/Sarah_Chen_PM.md",
+          "score": 0.57882977,
+          "content": "## Key Qualifications\n- Led 6 programs valued $5M\u2013$22M; 100% on-time delivery record\n- Certified Project Management Professional (PMP) and CISSP\n- Expert in FedRAMP authorization process (High, Moderate); 4 authorizations completed\n- Proficient in Jira, Confluence, MS Project, PowerBI program dashboards\n\n## Selected Project Experience",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 1
+          }
+        },
+        {
+          "collection_name": "resumes",
+          "source_filename": "Sarah_Chen_PM.md",
+          "file_path": "ConsultingKB/Resumes/Sarah_Chen_PM.md",
+          "score": 0.49383426,
+          "content": "## Certifications\nPMP (PMI) | CISSP (ISC\u00b2) | AWS Solutions Architect \u2013 Associate | SAFe 5 Agilist",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 4
+          }
+        },
+        {
+          "collection_name": "resumes",
+          "source_filename": "James_Okafor_DataEngineer.md",
+          "file_path": "ConsultingKB/Resumes/James_Okafor_DataEngineer.md",
+          "score": 0.48214072,
+          "content": "**VA Enterprise Data Analytics Platform** (2022\u2013Present) | $9.8M\nAnalytics Lead. Architected AWS GovCloud data lake ingesting 4.2TB/day. Built ML fraud detection model; $14M in flagged claims in first 6 months.\n\n**DHS Data Modernization** (2020\u20132022) | $6.1M\nSenior Data Engineer. Migrated 340 tables from Oracle on-prem to Snowflake on Azure Government. Reduced query times by 9\u00d7.",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 2
+          }
+        }
+      ],
+      "answer": "**Sarah Chen's resume** is the strongest match for this role.\n\nAccording to Sarah_Chen_PM.md, she offers directly relevant experience:\n\n- **DHS Cyber Transformation Program (2021\u20132024), $18.4M** \u2014 She served as Program Manager leading a 12-person team delivering enterprise SIEM and zero-trust implementation, achieving FedRAMP High ATO 2 months ahead of schedule\n- **FedRAMP expertise** \u2014 She has completed 4 FedRAMP authorizations (High and Moderate) and is listed as an expert in the authorization process\n- **Clearance and credentials** \u2014 She holds Top Secret/SCI clearance, PMP, and CISSP certifications\n- **Track record** \u2014 14 years of experience with 100% on-time delivery across 6 programs valued $5M\u2013$22M, including direct DHS and DoD cybersecurity work\n\nJames Okafor's resume (James_Okafor_DataEngineer.md) shows DHS experience but in a data engineering capacity focused on data modernization and analytics rather than program management, cybersecurity, or FedRAMP/zero-trust implementation.",
+      "warnings": [
+        "Judge flagged missing elements: Could have mentioned Sarah Chen's SAFe certification as relevant for program management"
+      ],
+      "failures": [],
+      "recommendations": [
+        "Use the judge's missing-elements feedback to strengthen prompt coverage for this task."
+      ],
+      "task_metadata": {}
+    },
+    {
+      "id": "not_found_award_001",
+      "name": "Unsupported award outcome question",
+      "task_type": "not_found",
+      "collection": "Contracts",
+      "query": "Did we win Solicitation HQ-2024-SOC-0041, what was the final award value, and when did performance start?",
+      "status": "PASS",
+      "overall_score": 1.0,
+      "deterministic_scores": {
+        "expected_source_hit_rate": null,
+        "expected_fact_coverage": null,
+        "required_section_compliance": null,
+        "missing_evidence_flag_compliance": null,
+        "citation_presence": null,
+        "not_found_handling": 1.0,
+        "matched_expected_sources": [],
+        "missing_expected_sources": [],
+        "matched_expected_facts": [],
+        "missing_expected_facts": [],
+        "matched_required_sections": [],
+        "missing_required_sections": [],
+        "matched_missing_evidence_flags": [],
+        "missing_expected_missing_evidence_flags": [],
+        "unacceptable_claims_present": [],
+        "citation_present": false,
+        "not_found_detected": true
+      },
+      "judge_scores": {
+        "groundedness_score": 10,
+        "completeness_score": 9,
+        "citation_accuracy_score": 10,
+        "hallucination_risk": "Low",
+        "unsupported_claims": [],
+        "missing_elements": [],
+        "judge_notes": "The answer correctly identifies that the solicitation HQ-2024-SOC-0041 only appears as placeholder example text in the NDA template and appropriately states that no information exists about award status, value, or performance dates. The response avoids all unacceptable claims (won, awarded, performance started, dollar amounts) and accurately describes what the retrieved context actually contains. This is a well-handled not_found scenario where the system properly declines to fabricate information while explaining exactly what was found."
+      },
+      "retrieved_sources": [
+        "IDIQ_GovCloud_Services_2023.md",
+        "NDA_Template_Standard.md"
+      ],
+      "retrieved_items": [
+        {
+          "collection_name": "contracts",
+          "source_filename": "IDIQ_GovCloud_Services_2023.md",
+          "file_path": "ConsultingKB/Contracts/IDIQ_GovCloud_Services_2023.md",
+          "score": 0.5054791,
+          "content": "# IDIQ Contract Summary \u2014 Government Cloud Advisory Services\n\n**Contract Name:** Federal Cloud Advisory and Implementation Services (FCAIS)\n**Contract Number:** GS-35F-0482W\n**Contracting Officer:** Patricia Huang, NIGP-CPP\n**Contracting Office:** GSA Federal Acquisition Service\n**Award Date:** September 15, 2023\n**Base Period:** 5 years (through September 2028)\n**Ceiling Value:** $85,000,000\n**Contract Type:** IDIQ, Time & Materials / Labor Hour",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 0
+          }
+        },
+        {
+          "collection_name": "contracts",
+          "source_filename": "IDIQ_GovCloud_Services_2023.md",
+          "file_path": "ConsultingKB/Contracts/IDIQ_GovCloud_Services_2023.md",
+          "score": 0.43934625,
+          "content": "## Key Contract Terms\n- Minimum order: $2,500\n- Maximum single task order: $15,000,000\n- Performance locations: On-site (DC metro) and remote authorized\n- Security clearances: Secret clearance required for DoD task orders\n- Small business subcontracting goal: 35%\n\n## Labor Categories & Rates (Sample)\n| Labor Category | Level | Hourly Rate |\n|----------------|-------|-------------|\n| Program Manager | Senior | $195/hr |\n| Cloud Architect | Senior | $215/hr |\n| Data Engineer | Mid | $165/hr |\n| Cybersecurity Analyst | Mid | $158/hr |\n| Business Analyst | Junior | $112/hr |",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 2
+          }
+        },
+        {
+          "collection_name": "contracts",
+          "source_filename": "IDIQ_GovCloud_Services_2023.md",
+          "file_path": "ConsultingKB/Contracts/IDIQ_GovCloud_Services_2023.md",
+          "score": 0.40576038,
+          "content": "## Scope\nFCAIS provides cloud advisory, architecture, migration, and managed services to civilian and DoD agencies. Authorized work includes:\n- Cloud strategy and roadmap development\n- IaaS/PaaS/SaaS migration and implementation\n- Cloud-native application development (DevSecOps)\n- Managed cloud operations and FinOps optimization\n- Zero-trust architecture design and implementation\n\n## Ordering Agencies (Active Task Orders)\n- Department of Veterans Affairs \u2014 3 active TOs ($9.8M, $3.2M, $1.1M)\n- HHS Office of the CIO \u2014 1 active TO ($4.7M)\n- DOJ Bureau of Prisons \u2014 1 active TO ($2.3M)",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 1
+          }
+        },
+        {
+          "collection_name": "contracts",
+          "source_filename": "NDA_Template_Standard.md",
+          "file_path": "ConsultingKB/Contracts/NDA_Template_Standard.md",
+          "score": 0.34387225,
+          "content": "### 5. Return/Destruction\nUpon request or termination of Purpose: return or certifiably destroy all CI within 10 business days.\n\n## Instructions for Use\n1. Fill in Party A (us) and Party B (counterpart) details in the header\n2. Define the \"Purpose\" specifically (e.g., \"Evaluation of teaming on Solicitation HQ-2024-SOC-0041\")\n3. Route to Legal for review if counterpart requests any material changes\n4. Execute via DocuSign; file executed copy in ContractVault under client folder",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 4
+          }
+        },
+        {
+          "collection_name": "contracts",
+          "source_filename": "NDA_Template_Standard.md",
+          "file_path": "ConsultingKB/Contracts/NDA_Template_Standard.md",
+          "score": 0.31830442,
+          "content": "## Purpose\nThis template is used for all teaming arrangements, partner discussions, and client pre-proposal engagements where proprietary technical approaches or pricing may be shared.\n\n## Key Provisions Summary",
+          "chunk_type": "text",
+          "metadata": {
+            "paragraph_index": 1
+          }
+        }
+      ],
+      "answer": "I don't have any information about the outcome of Solicitation HQ-2024-SOC-0041. The only reference to this solicitation in the provided context is from NDA_Template_Standard.md, where it appears as an example placeholder text for defining the \"Purpose\" field in an NDA (e.g., \"Evaluation of teaming on Solicitation HQ-2024-SOC-0041\").\n\nThere is no information about whether this solicitation was won, its award value, or performance start date.",
+      "warnings": [],
+      "failures": [],
+      "recommendations": [],
+      "task_metadata": {}
+    }
+  ],
+  "recommendations": [
+    "Use judge-reported missing elements to refine prompts for coverage-critical workflows."
+  ],
+  "output_markdown": "C:\\Users\\chase\\Documents\\kb-folder-agent\\evals\\reports\\eval_report_20260428_230010.md",
+  "output_json": "C:\\Users\\chase\\Documents\\kb-folder-agent\\evals\\results\\eval_results_20260428_230010.json"
+}

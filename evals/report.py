@@ -12,6 +12,20 @@ def write_json_report(summary: EvalRunSummary, output_path: str) -> None:
 
 
 def build_markdown_report(summary: EvalRunSummary) -> str:
+    judge_case_scores = [
+        case.judge_scores for case in summary.case_results if case.judge_scores
+    ]
+
+    def judge_avg(field_name: str) -> str:
+        values = [
+            getattr(scores, field_name)
+            for scores in judge_case_scores
+            if getattr(scores, field_name) is not None
+        ]
+        if not values:
+            return "N/A"
+        return f"{(sum(values) / len(values)):.1f}/10"
+
     lines = [
         "# KB Agent Evaluation Report",
         "",
@@ -33,6 +47,13 @@ def build_markdown_report(summary: EvalRunSummary) -> str:
         "## Scores by Task Type",
     ]
 
+    if summary.judge_enabled:
+        lines[14:14] = [
+            f"- Judge Groundedness: {judge_avg('groundedness_score')}",
+            f"- Judge Completeness: {judge_avg('completeness_score')}",
+            f"- Judge Citation Accuracy: {judge_avg('citation_accuracy_score')}",
+        ]
+
     for task_type, score in sorted(summary.scores_by_task_type.items()):
         lines.append(f"- {task_type}: {score:.0%}")
 
@@ -50,6 +71,7 @@ def build_markdown_report(summary: EvalRunSummary) -> str:
                     f"- Failure Reasons: {', '.join(case.failures) if case.failures else 'None recorded'}",
                     f"- Retrieved Sources: {', '.join(case.retrieved_sources) if case.retrieved_sources else 'None'}",
                     f"- Recommendation: {case.recommendations[0] if case.recommendations else 'Review retrieved context and prompts.'}",
+                    f"- Judge Notes: {case.judge_scores.judge_notes if case.judge_scores and case.judge_scores.judge_notes else 'N/A'}",
                     "",
                 ]
             )
@@ -67,6 +89,7 @@ def build_markdown_report(summary: EvalRunSummary) -> str:
                     f"- Warning Reasons: {', '.join(case.warnings) if case.warnings else 'None recorded'}",
                     f"- Retrieved Sources: {', '.join(case.retrieved_sources) if case.retrieved_sources else 'None'}",
                     f"- Recommendation: {case.recommendations[0] if case.recommendations else 'Tighten retrieval or output formatting.'}",
+                    f"- Judge Notes: {case.judge_scores.judge_notes if case.judge_scores and case.judge_scores.judge_notes else 'N/A'}",
                     "",
                 ]
             )
@@ -75,7 +98,13 @@ def build_markdown_report(summary: EvalRunSummary) -> str:
 
     lines.extend(["", "## All Case Results"])
     for case in summary.case_results:
-        lines.append(f"- {case.id}: {case.status} ({case.overall_score:.0%})")
+        judge_suffix = ""
+        if case.judge_scores:
+            risk = case.judge_scores.hallucination_risk or "Unknown"
+            groundedness = case.judge_scores.groundedness_score
+            groundedness_label = f", groundedness {groundedness}/10" if groundedness is not None else ""
+            judge_suffix = f" | judge risk {risk}{groundedness_label}"
+        lines.append(f"- {case.id}: {case.status} ({case.overall_score:.0%}){judge_suffix}")
 
     lines.extend(["", "## Recommendations"])
     if summary.recommendations:
