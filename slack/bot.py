@@ -14,7 +14,7 @@ from agent.orchestrator import (
     get_folder_list,
     infer_collection,
 )
-from agent.rag import answer_query, answer_query_all, answer_with_history, find_gaps, score_requirement, summarize_diff, summarize_recent_changes
+from agent.rag import answer_query, answer_query_all, answer_with_history, compare_collections, draft_section, find_gaps, score_requirement, summarize_diff, summarize_recent_changes
 from ingestion.quarantine import clear_all_quarantine, clear_quarantine, get_quarantined_files
 from storage.db import init_db
 
@@ -78,7 +78,7 @@ def _parse_command(text: str) -> tuple[str, str, str]:
     subcommand = parts[0].lower()
     rest = parts[1].strip() if len(parts) > 1 else ""
 
-    if subcommand not in {"ask", "clear-quarantine", "changes", "diff", "gaps", "score"}:
+    if subcommand not in {"ask", "clear-quarantine", "changes", "compare", "diff", "draft", "gaps", "score"}:
         return subcommand, "", rest
 
     # If rest starts with a quote, there's no folder — entire rest is the query
@@ -258,6 +258,108 @@ async def _handle_diff(folder_name: str, filename: str) -> tuple[str, list]:
     return f"🔍 Document Diff — {filename}", blocks
 
 
+async def _handle_draft(folder_name: str, requirement: str) -> tuple[str, list]:
+    if not folder_name or not requirement:
+        return _error_blocks('Usage: `/kb draft <FolderName> "<RFP requirement>"`')
+
+    if len(requirement.split()) < 10:
+        return _error_blocks("Please provide the full requirement text — short inputs produce poor drafts.")
+
+    collection_name = folder_to_collection_name(folder_name)
+    if not await collection_exists(collection_name):
+        msg = f"No knowledge base found for `{folder_name}`. Use `/kb list` to see available folders."
+        return _error_blocks(msg)
+
+    result = await draft_section(collection_name, requirement)
+
+    if not result.result_count:
+        return _error_blocks(result.answer)
+
+    # Separate Coverage line from the draft body
+    coverage_line = ""
+    body_lines = []
+    for line in result.answer.splitlines():
+        if line.startswith("Coverage:"):
+            coverage_line = line
+        else:
+            body_lines.append(line)
+    body_text = "\n".join(body_lines).strip()
+
+    blocks = [
+        _header(f"✍️ Draft — {folder_name}"),
+        _divider(),
+        _section(f"*Requirement:* {requirement}"),
+        _divider(),
+    ]
+
+    # One section block per paragraph to stay within Slack's 3000-char limit
+    for para in (p.strip() for p in body_text.split("\n\n") if p.strip()):
+        blocks.append(_section(clean_for_slack(para)))
+
+    blocks.append(_divider())
+    if coverage_line:
+        blocks.append(_context(f"📋 {coverage_line}"))
+    blocks.append(_context(
+        f"📄 Drafted from {result.result_count} chunk(s) | Sources: {', '.join(result.sources)}"
+    ))
+
+    return f"✍️ Draft — {folder_name}", blocks
+
+
+async def _handle_compare(folder1: str, rest: str) -> tuple[str, list]:
+    rest_parts = rest.split(None, 1)
+    folder2 = rest_parts[0] if rest_parts else ""
+    question = re.sub(r'^["\']|["\']$', "", rest_parts[1].strip()) if len(rest_parts) > 1 else ""
+
+    if not folder2 or not question:
+        return _error_blocks('Usage: `/kb compare <Folder1> <Folder2> "<question>"`')
+
+    col1 = folder_to_collection_name(folder1)
+    col2 = folder_to_collection_name(folder2)
+
+    if not await collection_exists(col1):
+        return _error_blocks(f"No knowledge base found for `{folder1}`. Use `/kb list` to see available folders.")
+    if not await collection_exists(col2):
+        return _error_blocks(f"No knowledge base found for `{folder2}`. Use `/kb list` to see available folders.")
+
+    result = await compare_collections(col1, col2, folder1, folder2, question)
+
+    if "error" in result:
+        return _error_blocks(result["error"])
+
+    answer = result["answer"]
+
+    # Extract DIRECT ANSWER for prominent display; show the rest as the body
+    direct_answer = ""
+    da_match = re.search(r"DIRECT ANSWER\s*\n(.+?)(?=\n\s*\n|\n\*\*|\Z)", answer, re.DOTALL)
+    if da_match:
+        direct_answer = da_match.group(1).strip()
+    body_text = re.sub(r"DIRECT ANSWER\s*\n.+?(?=\n\s*\n|\n\*\*|\Z)", "", answer, flags=re.DOTALL).strip()
+
+    blocks = [
+        _header(f"🔀 Compare — {folder1} vs {folder2}"),
+        _divider(),
+        _section(f"*Question:* {question}"),
+    ]
+    if direct_answer:
+        blocks.append(_section(f"_{direct_answer}_"))
+    blocks.append(_divider())
+    blocks.append(_section(clean_for_slack(body_text)))
+
+    overlap = result.get("overlap_files", [])
+    if overlap:
+        blocks.append(_context(f"⚠️ Overlap: {', '.join(overlap)} appears in both collections"))
+
+    blocks.append(_divider())
+    src_a = result["sources_a"]
+    src_b = result["sources_b"]
+    blocks.append(_context(
+        f"📄 *{folder1}:* {', '.join(src_a) or 'none'}   |   *{folder2}:* {', '.join(src_b) or 'none'}"
+    ))
+
+    return f"🔀 Compare — {folder1} vs {folder2}", blocks
+
+
 async def _handle_score(folder_name: str, requirement: str) -> tuple[str, list]:
     if not folder_name or not requirement:
         return _error_blocks('Usage: `/kb score <FolderName> "<RFP requirement>"`')
@@ -282,11 +384,10 @@ async def _handle_score(folder_name: str, requirement: str) -> tuple[str, list]:
             body_lines.append(line)
     body_text = "\n".join(body_lines).strip()
 
-    req_preview = requirement if len(requirement) <= 60 else requirement[:57] + "..."
     blocks = [
         _header(f"⭐ Score — {folder_name}"),
         _divider(),
-        _section(f"*Requirement:* {req_preview}"),
+        _section(f"*Requirement:* {requirement}"),
     ]
     if composite_line:
         blocks.append(_section(f"*{composite_line}*"))
@@ -330,6 +431,8 @@ def _help_blocks() -> tuple[str, list]:
         "• `/kb changes <FolderName>` — Summarize recent changes\n"
         "• `/kb status` — Watcher status and quarantined files\n"
         "• `/kb diff <FolderName> <filename>` — Summarize changes between last 2 versions\n"
+        "• `/kb draft <FolderName> \"<RFP requirement>\"` — Draft a proposal narrative section from KB content\n"
+        "• `/kb compare <Folder1> <Folder2> \"<question>\"` — Side-by-side comparative analysis of two collections\n"
         "• `/kb score <FolderName> \"<RFP requirement>\"` — Score KB readiness against a requirement (1–10)\n"
         "• `/kb gaps <FolderName> \"<topic>\"` — Gap analysis: what's missing relative to a topic\n"
         "• `/kb clear-quarantine <FolderName> <filename>` — Remove file from quarantine\n"
@@ -456,6 +559,10 @@ async def handle_kb(ack, respond, say, command):
             fallback, blocks = await _handle_clear_quarantine(folder, query)
         elif subcommand == "gaps":
             fallback, blocks = await _handle_gaps(folder, query)
+        elif subcommand == "draft":
+            fallback, blocks = await _handle_draft(folder, query)
+        elif subcommand == "compare":
+            fallback, blocks = await _handle_compare(folder, query)
         elif subcommand == "score":
             fallback, blocks = await _handle_score(folder, query)
         else:

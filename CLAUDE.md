@@ -109,6 +109,8 @@ All timestamps: ISO 8601 UTC.
 | `/kb changes <folder>` | Summarize recent changes in a collection |
 | `/kb diff <folder> <filename>` | AI summary of last 2 versions of a file |
 | `/kb status` | Watcher status + quarantined files |
+| `/kb draft <folder> "<requirement>"` | Draft a compliant proposal narrative section from KB content |
+| `/kb compare <folder1> <folder2> "<question>"` | Side-by-side comparative analysis of two collections |
 | `/kb score <folder> "<requirement>"` | Score KB readiness against an RFP requirement (1–10 scale) |
 | `/kb gaps <folder> "<topic>"` | Gap analysis: hard vs soft gaps relative to a topic |
 | `/kb clear-quarantine <folder> <filename>` | Remove file from quarantine |
@@ -154,7 +156,8 @@ All timestamps: ISO 8601 UTC.
 **V4-2** ✔ Threaded follow-up questions — `/kb ask` now posts in-channel via `say()` (not ephemeral) so users can reply in the thread. A `@app.event("message")` handler fires on all thread replies; it verifies the thread root was posted by the bot (via `_bot_id` resolved at startup with `auth_test()`), extracts the collection name from the header block text (regex on `"💬 FolderName"`), builds conversation history from prior thread messages, and calls `answer_with_history()` in `agent/rag.py`. `answer_with_history` searches the collection with the new query, prepends the existing conversation history, and sends all messages plus retrieved context to Claude in a single API call. Bot only responds to threads it owns; all other threads are ignored. Requires `channels:history` scope and `message.channels` event subscription. Multi-collection (`all`) threads are skipped (no single collection to route to).
 **V4-3** ✔ Gap analysis — `/kb gaps <folder> "<topic>"`: retrieves top-20 chunks, passes to Claude with a prompt distinguishing hard gaps (completely absent) vs soft gaps (mentioned but thin), suggests filling content, ends with a priority recommendation. `find_gaps()` in `agent/rag.py`; `_handle_gaps()` in `slack/bot.py`. Returns a warning if the collection has fewer than 5 chunks.
 **V4-4** ✔ Requirement scoring — `/kb score <folder> "<requirement>"`: retrieves top-15 chunks, scores KB readiness against an RFP requirement using a federal adjectival scale (Outstanding 9–10 → Unacceptable 1–2). Claude identifies distinct criteria, scores each individually, produces a weighted composite, and cites specific filenames for every strength/weakness. Returns warning if requirement is under 10 words. `score_requirement()` in `agent/rag.py`; `_handle_score()` in `slack/bot.py`.
-**V4-5**
+**V4-6** ✔ Proposal draft — `/kb draft <folder> "<requirement>"`: retrieves top-20 chunks and has Claude write a 3–4 paragraph compliant proposal narrative directly from KB content. Pulls specific contract values, dates, CPARS ratings, and COR names; inserts `[EVIDENCE MISSING: ...]` inline where the KB can't support a claim. Draft is split into per-paragraph section blocks. Ends with a Coverage line summarizing supported vs. flagged elements. Returns warning if requirement is under 10 words. `draft_section()` in `agent/rag.py`; `_handle_draft()` in `slack/bot.py`.
+**V4-5** ✔ Collection comparison — `/kb compare <folder1> <folder2> "<question>"`: parallel top-10 queries on both collections, synthesized by Claude into a structured comparative analysis with a comparison table, complementary strengths, divergences, and a bottom line. Flags file overlap between collections. Returns errors if either collection is missing or empty; warns if question is under 8 words. `compare_collections()` in `agent/rag.py`; `_handle_compare()` in `slack/bot.py`.
 
 
 ## Known Fixes

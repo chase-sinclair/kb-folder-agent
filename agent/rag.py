@@ -1,3 +1,4 @@
+import asyncio
 import difflib
 import logging
 import os
@@ -94,6 +95,52 @@ _SYSTEM_SCORE = (
     "(2–3 points only)\n\n"
     "TO IMPROVE\n"
     "[single highest-leverage action that would most raise the composite score]"
+)
+
+_SYSTEM_DRAFT = (
+    "You are a federal proposal writer drafting a compliant narrative section in response to an RFP requirement. "
+    "You have been given content from a past performance and technical knowledge base.\n\n"
+    "Rules:\n"
+    "1. Write professional proposal prose — not bullet points, not a summary. This must read like a real proposal section.\n"
+    "2. Directly address every element of the requirement. Mirror the requirement's language in your response.\n"
+    "3. Pull specific facts from the knowledge base: contract values, dates, CPARS ratings, COR names, agency names, technical metrics.\n"
+    "4. Where the knowledge base has no evidence for a specific required element, insert [EVIDENCE MISSING: <what's needed>] inline at that point.\n"
+    "5. Never fabricate — every specific claim must trace to the provided content.\n"
+    "6. Open with a strong topic sentence that directly addresses the requirement.\n"
+    "7. Write 3–4 focused paragraphs, each addressing a distinct aspect of the requirement.\n"
+    "8. End with a single line starting exactly with 'Coverage:' that summarizes which requirement elements were "
+    "fully supported and which were flagged.\n\n"
+    "Format:\n"
+    "[3–4 paragraphs of proposal prose]\n\n"
+    "Coverage: [supported elements] | Flagged: [missing elements, or 'none']"
+)
+
+_SYSTEM_COMPARE = (
+    "You are a knowledge base analyst producing a structured comparative analysis between "
+    "two collections: {{folder_a}} and {{folder_b}}. "
+    "You are given chunks from each, labeled accordingly. "
+    "Produce a genuine synthesis — not two summaries stapled together.\n\n"
+    "Rules:\n"
+    "1. Open with a DIRECT ANSWER: one sentence naming both collections that directly answers the question.\n"
+    "2. Identify the specific comparison dimensions embedded in the question — use those, not generic categories.\n"
+    "3. For each dimension: state what {{folder_a}} shows, what {{folder_b}} shows, and the meaningful difference.\n"
+    "4. Identify where collections are COMPLEMENTARY (reinforce each other) vs where they DIVERGE.\n"
+    "5. Close with a BOTTOM LINE paragraph synthesizing into an actionable conclusion.\n"
+    "6. Never fabricate — if one collection has no evidence on a dimension, state it explicitly.\n"
+    "7. Every specific claim must cite a filename in parentheses.\n\n"
+    "Format your response exactly as:\n\n"
+    "DIRECT ANSWER\n"
+    "[one sentence]\n\n"
+    "**Comparison Table**\n"
+    "| Dimension | {{folder_a}} | {{folder_b}} |\n"
+    "| --- | --- | --- |\n"
+    "| [dimension] | [evidence] | [evidence] |\n\n"
+    "**Complementary Strengths**\n"
+    "• [where both collections reinforce each other] ([filename])\n\n"
+    "**Divergences**\n"
+    "• [where they meaningfully differ] ([filename])\n\n"
+    "**Bottom Line**\n"
+    "[actionable conclusion paragraph]"
 )
 
 _SYSTEM_ALL = (
@@ -274,6 +321,104 @@ async def answer_with_history(collection_name: str, history: list[dict], query: 
         return RagResult(answer=answer, sources=_unique_sources(results), collection_name=collection_name, result_count=len(results))
     except Exception as exc:
         log.error("answer_with_history failed for collection %r: %s", collection_name, exc)
+        raise
+
+
+async def draft_section(collection_name: str, requirement: str) -> RagResult:
+    if not requirement or not requirement.strip():
+        return RagResult(answer="Please provide a requirement.", sources=[], collection_name=collection_name, result_count=0)
+
+    if len(requirement.split()) < 10:
+        return RagResult(
+            answer="Please provide the full requirement text — short inputs produce poor drafts.",
+            sources=[],
+            collection_name=collection_name,
+            result_count=0,
+        )
+
+    try:
+        results = await search(collection_name, requirement, top_k=20)
+
+        if not results:
+            return RagResult(
+                answer="No relevant content found in this collection for the given requirement.",
+                sources=[],
+                collection_name=collection_name,
+                result_count=0,
+            )
+
+        context = _build_context(results)
+        user_prompt = f"Knowledge base content:\n{context}\n\nRFP requirement to address:\n{requirement}"
+        response = await _client.messages.create(
+            model=MODEL,
+            max_tokens=2048,
+            system=_SYSTEM_DRAFT,
+            messages=[{"role": "user", "content": user_prompt}],
+        )
+        answer = response.content[0].text
+
+        return RagResult(
+            answer=answer,
+            sources=_unique_sources(results),
+            collection_name=collection_name,
+            result_count=len(results),
+        )
+    except Exception as exc:
+        log.error("draft_section failed for collection %r: %s", collection_name, exc)
+        raise
+
+
+async def compare_collections(
+    collection_name_a: str,
+    collection_name_b: str,
+    folder_a: str,
+    folder_b: str,
+    question: str,
+) -> dict:
+    if len(question.split()) < 8:
+        return {"error": "Please be more specific — provide at least 8 words to define what dimensions you want compared."}
+
+    try:
+        results_a, results_b = await asyncio.gather(
+            search(collection_name_a, question, top_k=10),
+            search(collection_name_b, question, top_k=10),
+        )
+
+        if not results_a:
+            return {"error": f"No content found in `{folder_a}` for this question."}
+        if not results_b:
+            return {"error": f"No content found in `{folder_b}` for this question."}
+
+        paths_a = {r.get("file_path", "") for r in results_a}
+        paths_b = {r.get("file_path", "") for r in results_b}
+        overlap_files = sorted(Path(f).name for f in paths_a & paths_b if f)
+
+        context_a = _build_context(results_a)
+        context_b = _build_context(results_b)
+        user_prompt = (
+            f"Collection A ({folder_a}):\n{context_a}\n\n"
+            f"Collection B ({folder_b}):\n{context_b}\n\n"
+            f"Question: {question}"
+        )
+        system = _SYSTEM_COMPARE.replace("{{folder_a}}", folder_a).replace("{{folder_b}}", folder_b)
+        response = await _client.messages.create(
+            model=MODEL,
+            max_tokens=2048,
+            system=system,
+            messages=[{"role": "user", "content": user_prompt}],
+        )
+        answer = response.content[0].text
+
+        return {
+            "answer": answer,
+            "sources_a": _unique_sources(results_a),
+            "sources_b": _unique_sources(results_b),
+            "result_count_a": len(results_a),
+            "result_count_b": len(results_b),
+            "overlap_files": overlap_files,
+        }
+    except Exception as exc:
+        log.error("compare_collections failed (%r vs %r): %s", collection_name_a, collection_name_b, exc)
         raise
 
 
