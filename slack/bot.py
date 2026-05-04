@@ -18,6 +18,7 @@ from agent.orchestrator import (
     infer_collection,
 )
 from agent.rag import answer_query, answer_query_all, answer_with_history, compare_collections, draft_section, find_gaps, score_requirement, summarize_diff, summarize_recent_changes
+from integrations.notion import create_ticket
 from evals.config import REPORTS_DIR, RESULTS_DIR
 from evals.report import write_json_report, write_markdown_report
 from evals.runner import run_evaluations
@@ -31,6 +32,8 @@ log = logging.getLogger(__name__)
 
 SLACK_BOT_TOKEN = os.environ["SLACK_BOT_TOKEN"]
 SLACK_SIGNING_SECRET = os.environ["SLACK_SIGNING_SECRET"]
+NOTION_API_KEY = os.environ.get("NOTION_API_KEY", "")
+NOTION_DATABASE_ID = os.environ.get("NOTION_DATABASE_ID", "")
 
 app = AsyncApp(token=SLACK_BOT_TOKEN, signing_secret=SLACK_SIGNING_SECRET)
 
@@ -622,7 +625,8 @@ def _help_blocks() -> tuple[str, list]:
         "• `/kb eval [all|case <id>|task-type <type>|collection <FolderName>] [judge]` — Run Evaluation Center cases in the background\n"
         "• `/kb eval-report` — Show the latest saved evaluation summary\n"
         "• `/kb clear-quarantine <FolderName> <filename>` — Remove file from quarantine\n"
-        "• `/kb clear-quarantine-all` — Clear all quarantined files and re-ingest on restart"
+        "• `/kb clear-quarantine-all` — Clear all quarantined files and re-ingest on restart\n"
+        "• `/kb ticket \"<task name>\" [high|medium|low] [YYYY-MM-DD]` — Create a Notion ticket"
     )
     return "KB Agent Commands", [_section(text)]
 
@@ -697,6 +701,18 @@ async def handle_thread_reply(event, client):
         if first_msg.get("bot_id") != _bot_id:
             return
 
+        # Ticket creation from thread: "ticket <name> [priority] [date]"
+        if re.match(r"^ticket\b", user_text, re.IGNORECASE):
+            rest = user_text[len("ticket"):].strip()
+            fallback, blocks = await _handle_ticket(rest)
+            await client.chat_postMessage(
+                channel=channel,
+                thread_ts=thread_ts,
+                text=fallback,
+                blocks=blocks,
+            )
+            return
+
         collection_name = _extract_collection_from_thread(first_msg)
         if not collection_name:
             return
@@ -718,6 +734,51 @@ async def handle_thread_reply(event, client):
 
 
 # ---------------------------------------------------------------------------
+# Notion ticket
+# ---------------------------------------------------------------------------
+
+async def _handle_ticket(rest: str) -> tuple[str, list]:
+    usage = 'Usage: `/kb ticket "<task name>" [high|medium|low] [YYYY-MM-DD]`'
+    rest = rest.strip()
+    if not rest:
+        return _error_blocks(usage)
+
+    match = re.match(r'^["\'](.+?)["\'](.*)$', rest)
+    if match:
+        task_name = match.group(1).strip()
+        extra = match.group(2).strip()
+    else:
+        # No quotes — treat entire string as task name
+        task_name = rest
+        extra = ""
+
+    if not task_name:
+        return _error_blocks(usage)
+
+    priority = "Medium"
+    due_date: str | None = None
+    for token in extra.split():
+        if token.lower() in {"high", "medium", "low"}:
+            priority = token.capitalize()
+        elif re.match(r"^\d{4}-\d{2}-\d{2}$", token):
+            due_date = token
+
+    try:
+        url = await create_ticket(task_name, priority, due_date)
+    except Exception as exc:
+        log.error("Notion ticket creation failed: %s", exc)
+        return _error_blocks(f"❌ Failed to create ticket: {exc}")
+
+    msg = f"✅ *{task_name}* created (Priority: {priority})"
+    if due_date:
+        msg += f", due {due_date}"
+    blocks = [_header("🎫 Ticket Created"), _divider(), _section(msg)]
+    if url:
+        blocks.append(_context(f"<{url}|Open in Notion>"))
+    return msg, blocks
+
+
+# ---------------------------------------------------------------------------
 # Slash command handler
 # ---------------------------------------------------------------------------
 
@@ -731,7 +792,9 @@ async def handle_kb(ack, respond, say, command):
     user_id = command.get("user_id", "")
 
     try:
-        if subcommand == "list":
+        if subcommand == "ticket":
+            fallback, blocks = await _handle_ticket(query)
+        elif subcommand == "list":
             fallback, blocks = await _handle_list()
         elif subcommand == "ask":
             fallback, blocks = await _handle_ask(folder, query)

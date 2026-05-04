@@ -5,7 +5,7 @@ AI-powered knowledge base agent: local folders or OneDrive → searchable Slack 
 ## Stack
 - **Python 3.13**, **MCP** (Model Context Protocol)
 - **Vector DB**: Qdrant (local Docker, port 6333) — **Embeddings**: OpenAI `text-embedding-3-small`
-- **LLM**: Anthropic Claude (`claude-opus-4-5`) — **Slack**: `slack-bolt` AsyncApp, Socket Mode
+- **LLM**: Anthropic Codex (`Codex-opus-4-5`) — **Slack**: `slack-bolt` AsyncApp, Socket Mode
 - **File watching**: `watchdog` (local) / poll-based (OneDrive via MSAL + Graph API)
 
 ## Project Structure
@@ -26,19 +26,6 @@ kb-folder-agent/
 │   ├── orchestrator.py            # Routes MCP calls; backend-switchable via BACKEND env var
 │   ├── rag.py                     # answer_query(), answer_query_all(), summarize_diff() → RagResult
 │   └── digest.py                  # Daily digest builder + Slack poster + scheduler
-├── evals/
-│   ├── config.py                  # REPORTS_DIR, RESULTS_DIR path constants
-│   ├── schema.py                  # EvalRunConfig, EvalSummary dataclasses
-│   ├── runner.py                  # run_evaluations() — main eval orchestration
-│   ├── metrics.py                 # Retrieval quality, fact coverage, format compliance scoring
-│   ├── judge.py                   # Optional LLM-based judge (use_judge=True)
-│   ├── report.py                  # write_json_report(), write_markdown_report()
-│   ├── compare.py                 # Per-run comparison utilities
-│   ├── compare_runs.py            # Cross-run diff reporting
-│   ├── run_evals.py               # CLI entry point
-│   └── test_cases.yaml            # Benchmark test cases
-├── integrations/
-│   └── notion.py                  # create_ticket() — Notion Tasks Tracker via REST API
 ├── slack/
 │   └── bot.py                     # /kb slash command handler
 └── storage/
@@ -58,7 +45,7 @@ python main.py connect ~/path/to/folder  # Write WATCHED_FOLDER to .env
 > **Note: This project runs on Windows. Use raw strings (`r'...'`) for all file paths.**
 
 ```
-ANTHROPIC_API_KEY       # Claude reasoning
+ANTHROPIC_API_KEY       # Codex reasoning
 OPENAI_API_KEY          # text-embedding-3-small embeddings
 SLACK_BOT_TOKEN         # xoxb-...
 SLACK_SIGNING_SECRET    # Slack request verification
@@ -74,8 +61,6 @@ AZURE_TENANT_ID         # consumers (personal) or tenant ID
 AZURE_CLIENT_SECRET     # App secret (if using confidential client)
 ONEDRIVE_FOLDER         # Root folder name in OneDrive (e.g. test-kb)
 ONEDRIVE_POLL_INTERVAL  # Seconds between OneDrive polls (default: 60)
-NOTION_API_KEY          # Notion integration API key (optional)
-NOTION_DATABASE_ID      # Notion Tasks Tracker database ID (optional)
 ```
 
 **NEVER read or output the contents of `.env`.**
@@ -129,9 +114,6 @@ All timestamps: ISO 8601 UTC.
 | `/kb score <folder> "<requirement>"` | Score KB readiness against an RFP requirement (1–10 scale) |
 | `/kb gaps <folder> "<topic>"` | Gap analysis: hard vs soft gaps relative to a topic |
 | `/kb clear-quarantine <folder> <filename>` | Remove file from quarantine |
-| `/kb eval [all\|case <id>\|task-type <type>\|collection <folder>] [judge]` | Run evaluation suite against KB benchmark |
-| `/kb eval-report` | Show the latest saved evaluation summary |
-| `/kb ticket "<task name>" [high\|medium\|low] [YYYY-MM-DD]` | Create a Notion ticket in the Tasks Tracker database |
 
 ## Rules
 - **NEVER modify or output `.env`**
@@ -153,7 +135,7 @@ All timestamps: ISO 8601 UTC.
 **Polish D** ✔ README.md with full setup guide and command reference.
 **V2-1** ✔ Multi-collection search — `search_all_collections()` + `/kb ask all`.
 **V2-2** ✔ Agent-inferred routing — `infer_collection()` scores top-1 per collection; `INFERENCE_CONFIDENCE_THRESHOLD=0.35`.
-**V2-3** ✔ Version snapshots + diffs — `file_versions` table; `summarize_diff()` via difflib + Claude; `/kb diff`.
+**V2-3** ✔ Version snapshots + diffs — `file_versions` table; `summarize_diff()` via difflib + Codex; `/kb diff`.
 **V2-4** ✔ Richer file types — `.pptx`, `.eml`, `.html` chunkers; python-pptx, beautifulsoup4.
 **V2-5** ✔ Scheduled digest — `agent/digest.py`; daily Slack post via `DIGEST_ENABLED/DIGEST_TIME/DIGEST_CHANNEL`.
 
@@ -171,17 +153,12 @@ All timestamps: ISO 8601 UTC.
 - `agent/orchestrator.py`: `search()` threads `query_text=query` into `query_collection` (public API unchanged).
 - Both watchers: `_ensure_collection` updated to match; `PointStruct.vector` changed to dict `{"": dense, "text-sparse": sparse}` so each point carries both vectors at index time.
 - Existing collections: startup `update_collection` adds sparse config; points re-indexed with sparse vectors on next ingest cycle. Dense-only fallback ensures zero downtime during migration.
-**V4-2** ✔ Threaded follow-up questions — `/kb ask` now posts in-channel via `say()` (not ephemeral) so users can reply in the thread. A `@app.event("message")` handler fires on all thread replies; it verifies the thread root was posted by the bot (via `_bot_id` resolved at startup with `auth_test()`), extracts the collection name from the header block text (regex on `"💬 FolderName"`), builds conversation history from prior thread messages, and calls `answer_with_history()` in `agent/rag.py`. `answer_with_history` searches the collection with the new query, prepends the existing conversation history, and sends all messages plus retrieved context to Claude in a single API call. Bot only responds to threads it owns; all other threads are ignored. Requires `channels:history` scope and `message.channels` event subscription. Multi-collection (`all`) threads are skipped (no single collection to route to).
-**V4-3** ✔ Gap analysis — `/kb gaps <folder> "<topic>"`: retrieves top-20 chunks, passes to Claude with a prompt distinguishing hard gaps (completely absent) vs soft gaps (mentioned but thin), suggests filling content, ends with a priority recommendation. `find_gaps()` in `agent/rag.py`; `_handle_gaps()` in `slack/bot.py`. Returns a warning if the collection has fewer than 5 chunks.
-**V4-4** ✔ Requirement scoring — `/kb score <folder> "<requirement>"`: retrieves top-15 chunks, scores KB readiness against an RFP requirement using a federal adjectival scale (Outstanding 9–10 → Unacceptable 1–2). Claude identifies distinct criteria, scores each individually, produces a weighted composite, and cites specific filenames for every strength/weakness. Returns warning if requirement is under 10 words. `score_requirement()` in `agent/rag.py`; `_handle_score()` in `slack/bot.py`.
-**V4-5** ✔ Collection comparison — `/kb compare <folder1> <folder2> "<question>"`: parallel top-10 queries on both collections, synthesized by Claude into a structured comparative analysis with a comparison table, complementary strengths, divergences, and a bottom line. Flags file overlap between collections. Returns errors if either collection is missing or empty; warns if question is under 8 words. `compare_collections()` in `agent/rag.py`; `_handle_compare()` in `slack/bot.py`.
-**V4-6** ✔ Proposal draft — `/kb draft <folder> "<requirement>"`: retrieves top-20 chunks and has Claude write a 3–4 paragraph compliant proposal narrative directly from KB content. Pulls specific contract values, dates, CPARS ratings, and COR names; inserts `[EVIDENCE MISSING: ...]` inline where the KB can't support a claim. Draft is split into per-paragraph section blocks. Ends with a Coverage line summarizing supported vs. flagged elements. Returns warning if requirement is under 10 words. `draft_section()` in `agent/rag.py`; `_handle_draft()` in `slack/bot.py`.
+**V4-2** ✔ Threaded follow-up questions — `/kb ask` now posts in-channel via `say()` (not ephemeral) so users can reply in the thread. A `@app.event("message")` handler fires on all thread replies; it verifies the thread root was posted by the bot (via `_bot_id` resolved at startup with `auth_test()`), extracts the collection name from the header block text (regex on `"💬 FolderName"`), builds conversation history from prior thread messages, and calls `answer_with_history()` in `agent/rag.py`. `answer_with_history` searches the collection with the new query, prepends the existing conversation history, and sends all messages plus retrieved context to Codex in a single API call. Bot only responds to threads it owns; all other threads are ignored. Requires `channels:history` scope and `message.channels` event subscription. Multi-collection (`all`) threads are skipped (no single collection to route to).
+**V4-3** ✔ Gap analysis — `/kb gaps <folder> "<topic>"`: retrieves top-20 chunks, passes to Codex with a prompt distinguishing hard gaps (completely absent) vs soft gaps (mentioned but thin), suggests filling content, ends with a priority recommendation. `find_gaps()` in `agent/rag.py`; `_handle_gaps()` in `slack/bot.py`. Returns a warning if the collection has fewer than 5 chunks.
+**V4-4** ✔ Requirement scoring — `/kb score <folder> "<requirement>"`: retrieves top-15 chunks, scores KB readiness against an RFP requirement using a federal adjectival scale (Outstanding 9–10 → Unacceptable 1–2). Codex identifies distinct criteria, scores each individually, produces a weighted composite, and cites specific filenames for every strength/weakness. Returns warning if requirement is under 10 words. `score_requirement()` in `agent/rag.py`; `_handle_score()` in `slack/bot.py`.
+**V4-6** ✔ Proposal draft — `/kb draft <folder> "<requirement>"`: retrieves top-20 chunks and has Codex write a 3–4 paragraph compliant proposal narrative directly from KB content. Pulls specific contract values, dates, CPARS ratings, and COR names; inserts `[EVIDENCE MISSING: ...]` inline where the KB can't support a claim. Draft is split into per-paragraph section blocks. Ends with a Coverage line summarizing supported vs. flagged elements. Returns warning if requirement is under 10 words. `draft_section()` in `agent/rag.py`; `_handle_draft()` in `slack/bot.py`.
+**V4-5** ✔ Collection comparison — `/kb compare <folder1> <folder2> "<question>"`: parallel top-10 queries on both collections, synthesized by Codex into a structured comparative analysis with a comparison table, complementary strengths, divergences, and a bottom line. Flags file overlap between collections. Returns errors if either collection is missing or empty; warns if question is under 8 words. `compare_collections()` in `agent/rag.py`; `_handle_compare()` in `slack/bot.py`.
 
-
-## V5 Phases
-
-**V5-1** ✔ Evaluation Center — `evals/` package with YAML-driven benchmark suite, retrieval quality / fact coverage / format compliance metrics, optional LLM judge (`use_judge=True`), JSON + Markdown report output, and cross-run comparison. `/kb eval` runs the suite in the background and posts an ephemeral summary; `/kb eval-report` shows the latest saved results. `run_evaluations()` in `evals/runner.py`; `_handle_eval()` / `_handle_eval_report()` in `slack/bot.py`. Eval scope filters: `all`, `case <id>`, `task-type <type>`, `collection <folder>`.
-**V5-2** ✔ Notion integration — `integrations/notion.py` wraps the Notion REST API to create pages in a Tasks Tracker database. `/kb ticket "<task name>" [high|medium|low] [YYYY-MM-DD]` creates a ticket and returns the Notion page URL. Also works from threads (prefix message with `ticket …`). Requires `NOTION_API_KEY` and `NOTION_DATABASE_ID`.
 
 ## Known Fixes
 
