@@ -17,6 +17,8 @@ from agent.orchestrator import (
     get_folder_list,
     infer_collection,
 )
+from agent import orchestrator as _orch
+from agent.agent_loop import run_agent
 from agent.rag import answer_query, answer_query_all, answer_with_history, compare_collections, draft_section, find_gaps, score_requirement, summarize_diff, summarize_recent_changes
 from integrations.notion import create_ticket
 from evals.config import REPORTS_DIR, RESULTS_DIR
@@ -615,6 +617,7 @@ def _help_blocks() -> tuple[str, list]:
         "*KB Agent Commands*\n"
         "• `/kb list` — Show all knowledge base collections\n"
         "• `/kb ask <FolderName> \"<question>\"` — Ask a question\n"
+        "• `/kb agent <question>` — Multi-step agentic query with live reasoning\n"
         "• `/kb changes <FolderName>` — Summarize recent changes\n"
         "• `/kb status` — Watcher status and quarantined files\n"
         "• `/kb diff <FolderName> <filename>` — Summarize changes between last 2 versions\n"
@@ -779,6 +782,60 @@ async def _handle_ticket(rest: str) -> tuple[str, list]:
 
 
 # ---------------------------------------------------------------------------
+# Agentic loop
+# ---------------------------------------------------------------------------
+
+def _is_complex_query(question: str) -> bool:
+    """Heuristic: route to agent if query looks multi-hop or comparative."""
+    signals = [
+        "compare", "vs", "versus", "difference between",
+        "across all", "which folder", "which collection",
+        "best", "most relevant", "where can i find",
+        "summarize everything", "all collections",
+    ]
+    q = question.lower()
+    return any(s in q for s in signals)
+
+
+async def _handle_agent_in_channel(question: str, say, respond) -> None:
+    """Run the agentic loop and post each reasoning step to the channel."""
+    if not question:
+        await respond(text="Usage: `/kb agent <question>`")
+        return
+
+    await respond(
+        text="🤖 Agent starting...",
+        blocks=[_section("🤖 Agent starting — I'll post my reasoning in the channel.")],
+    )
+
+    opener = await say(text=f"🤖 *Agent Query:* {question}")
+    thread_ts = opener.get("ts") if opener else None
+
+    async def post_step(text: str) -> None:
+        try:
+            await say(text=text, thread_ts=thread_ts)
+        except Exception as exc:
+            log.warning("Agent post_step failed: %s", exc)
+
+    try:
+        answer = await run_agent(question, _orch, post_step, max_rounds=3)
+    except Exception as exc:
+        log.error("Agent run failed: %s", exc)
+        await say(
+            text=f"Agent error: {exc}",
+            blocks=[_section(f"❌ Agent error: {exc}")],
+            thread_ts=thread_ts,
+        )
+        return
+
+    await say(
+        text=answer,
+        blocks=[_header("✅ Agent Answer"), _divider(), _section(clean_for_slack(answer))],
+        thread_ts=thread_ts,
+    )
+
+
+# ---------------------------------------------------------------------------
 # Slash command handler
 # ---------------------------------------------------------------------------
 
@@ -792,11 +849,17 @@ async def handle_kb(ack, respond, say, command):
     user_id = command.get("user_id", "")
 
     try:
-        if subcommand == "ticket":
+        if subcommand == "agent":
+            await _handle_agent_in_channel(query, say, respond)
+            return
+        elif subcommand == "ticket":
             fallback, blocks = await _handle_ticket(query)
         elif subcommand == "list":
             fallback, blocks = await _handle_list()
         elif subcommand == "ask":
+            if not folder and _is_complex_query(query):
+                await _handle_agent_in_channel(query, say, respond)
+                return
             fallback, blocks = await _handle_ask(folder, query)
         elif subcommand == "changes":
             fallback, blocks = await _handle_changes(folder)

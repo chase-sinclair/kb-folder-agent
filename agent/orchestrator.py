@@ -9,7 +9,7 @@ load_dotenv()
 from ingestion.embedder import embed_query
 from mcp_servers.vectordb_server import (
     delete_document_chunks,
-    get_collection_info,
+    get_collection_info as _vdb_get_collection_info,
     list_collections,
     query_collection,
 )
@@ -58,7 +58,7 @@ async def search(collection_name: str, query: str, top_k: int = 5) -> list[dict]
 
 async def collection_exists(collection_name: str) -> bool:
     try:
-        info = await get_collection_info(collection_name)
+        info = await _vdb_get_collection_info(collection_name)
         return info["exists"]
     except Exception as exc:
         log.error("collection_exists check failed for %r: %s", collection_name, exc)
@@ -67,10 +67,24 @@ async def collection_exists(collection_name: str) -> bool:
 
 async def get_collection_status(collection_name: str) -> dict:
     try:
-        return await get_collection_info(collection_name)
+        return await _vdb_get_collection_info(collection_name)
     except Exception as exc:
         log.error("get_collection_status failed for %r: %s", collection_name, exc)
         raise
+
+
+async def get_collection_info(collection_name: str) -> dict:
+    return await _vdb_get_collection_info(collection_name)
+
+
+async def search_all(query: str) -> list[dict]:
+    """Flattened fan-out search across all collections. Each hit includes a collection_name key."""
+    per_collection = await search_all_collections(query)
+    flat: list[dict] = []
+    for col_name, hits in per_collection.items():
+        for hit in hits:
+            flat.append({**hit, "collection_name": col_name})
+    return flat
 
 
 async def search_all_collections(query: str, top_k_per_collection: int = 3) -> dict[str, list[dict]]:

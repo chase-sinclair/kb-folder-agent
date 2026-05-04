@@ -23,6 +23,7 @@ kb-folder-agent/
 │   ├── embedder.py                # OpenAI embedding calls, batched, with retry
 │   └── quarantine.py              # Quarantine table ops, ErrorType enum
 ├── agent/
+│   ├── agent_loop.py              # run_agent() — agentic loop with tool use and live Slack reasoning posts
 │   ├── orchestrator.py            # Routes MCP calls; backend-switchable via BACKEND env var
 │   ├── rag.py                     # answer_query(), answer_query_all(), summarize_diff() → RagResult
 │   └── digest.py                  # Daily digest builder + Slack poster + scheduler
@@ -129,6 +130,7 @@ All timestamps: ISO 8601 UTC.
 | `/kb score <folder> "<requirement>"` | Score KB readiness against an RFP requirement (1–10 scale) |
 | `/kb gaps <folder> "<topic>"` | Gap analysis: hard vs soft gaps relative to a topic |
 | `/kb clear-quarantine <folder> <filename>` | Remove file from quarantine |
+| `/kb agent <question>` | Multi-step agentic query with live tool-use reasoning posted to channel |
 | `/kb eval [all\|case <id>\|task-type <type>\|collection <folder>] [judge]` | Run evaluation suite against KB benchmark |
 | `/kb eval-report` | Show the latest saved evaluation summary |
 | `/kb ticket "<task name>" [high\|medium\|low] [YYYY-MM-DD]` | Create a Notion ticket in the Tasks Tracker database |
@@ -182,6 +184,10 @@ All timestamps: ISO 8601 UTC.
 
 **V5-1** ✔ Evaluation Center — `evals/` package with YAML-driven benchmark suite, retrieval quality / fact coverage / format compliance metrics, optional LLM judge (`use_judge=True`), JSON + Markdown report output, and cross-run comparison. `/kb eval` runs the suite in the background and posts an ephemeral summary; `/kb eval-report` shows the latest saved results. `run_evaluations()` in `evals/runner.py`; `_handle_eval()` / `_handle_eval_report()` in `slack/bot.py`. Eval scope filters: `all`, `case <id>`, `task-type <type>`, `collection <folder>`.
 **V5-2** ✔ Notion integration — `integrations/notion.py` wraps the Notion REST API to create pages in a Tasks Tracker database. `/kb ticket "<task name>" [high|medium|low] [YYYY-MM-DD]` creates a ticket and returns the Notion page URL. Also works from threads (prefix message with `ticket …`). Requires `NOTION_API_KEY` and `NOTION_DATABASE_ID`.
+
+## V6 Phases
+
+**V6-1** ✔ Agentic loop — `agent/agent_loop.py` implements a multi-step Claude tool-use loop with four tools: `list_collections`, `query_collection`, `search_all_collections`, and `get_collection_info`. Each round, reasoning text is posted to Slack before tool calls (`🔍`), tool calls are announced (`⚙️`), and results are summarized (`📄`). Max 3 rounds; if rounds are exhausted, a final non-tool call synthesizes the findings. `/kb agent <question>` always routes through the agent. `/kb ask <question>` (auto-routed, no explicit folder) silently routes to the agent when `_is_complex_query()` detects comparative/multi-hop signals. `run_agent()` takes the orchestrator module as a parameter for testability. `orchestrator.py` gained two public methods: `get_collection_info()` and `search_all()` (flat list with `collection_name` key added per hit).
 
 ## Known Fixes
 
