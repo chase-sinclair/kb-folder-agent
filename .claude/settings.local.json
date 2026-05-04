@@ -21,7 +21,14 @@
       "Bash(curl -s http://localhost:6333/)",
       "Bash(python -m json.tool)",
       "Bash(python *)",
-      "Bash(grep -v \"^$\")"
+      "Bash(grep -v \"^$\")",
+      "Bash(npm --version)",
+      "Bash(mkdir -p web)",
+      "Bash(npx create-next-app@latest . --typescript --tailwind --eslint --app --src-dir --import-alias \"@/*\" --yes)",
+      "Bash(npx tsc *)",
+      "Bash(npm run *)",
+      "Bash(curl -s http://localhost:3000)",
+      "Bash(curl -s http://localhost:3003)"
     ]
   }
 }

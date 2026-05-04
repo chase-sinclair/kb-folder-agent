@@ -40,6 +40,22 @@ kb-folder-agent/
 │   └── test_cases.yaml            # Benchmark test cases
 ├── integrations/
 │   └── notion.py                  # create_ticket() — Notion Tasks Tracker via REST API
+├── api/
+│   ├── main.py                    # FastAPI app — CORS, router mounts for /collections and /query
+│   └── routers/
+│       ├── collections.py         # GET /collections, GET /collections/{name}/info
+│       └── query.py               # POST /query/ask|agent|score|gaps|draft|compare; agent uses SSE stream
+├── web/                           # Next.js 15 frontend (src/app router, TypeScript, Tailwind v4)
+│   └── src/
+│       ├── app/layout.tsx         # Dark layout shell (gray-950 bg, gray-900 sidebar)
+│       ├── app/page.tsx           # Root page — CollectionSidebar + MainPane
+│       ├── lib/api.ts             # Typed fetch wrappers for all API endpoints
+│       └── components/
+│           ├── CollectionSidebar.tsx
+│           ├── MainPane.tsx       # Tab bar routing (Ask · Agent · Score · Gaps · Draft · Compare)
+│           ├── LoadingSpinner.tsx
+│           └── tabs/              # AskTab, AgentTab, ScoreTab, GapsTab, DraftTab, CompareTab
+├── run_api.py                     # uvicorn entry point: python run_api.py (port 8000)
 ├── slack/
 │   └── bot.py                     # /kb slash command handler
 └── storage/
@@ -188,6 +204,12 @@ All timestamps: ISO 8601 UTC.
 ## V6 Phases
 
 **V6-1** ✔ Agentic loop — `agent/agent_loop.py` implements a multi-step Claude tool-use loop with four tools: `list_collections`, `query_collection`, `search_all_collections`, and `get_collection_info`. Each round, reasoning text is posted to Slack before tool calls (`🔍`), tool calls are announced (`⚙️`), and results are summarized (`📄`). Max 3 rounds; if rounds are exhausted, a final non-tool call synthesizes the findings. `/kb agent <question>` always routes through the agent. `/kb ask <question>` (auto-routed, no explicit folder) silently routes to the agent when `_is_complex_query()` detects comparative/multi-hop signals. `run_agent()` takes the orchestrator module as a parameter for testability. `orchestrator.py` gained two public methods: `get_collection_info()` and `search_all()` (flat list with `collection_name` key added per hit).
+
+## V7 Phases
+
+**V7-1** ✔ FastAPI REST + SSE layer — `api/` package exposes the existing agent functions as HTTP endpoints. `GET /collections` and `GET /collections/{name}/info` serve collection metadata. `POST /query/ask` handles single-collection and fan-out RAG. `POST /query/agent` streams the agentic loop via SSE using an `asyncio.Queue` bridge between `run_agent()`'s `post_step` callback and the `StreamingResponse` generator. `POST /query/score|gaps|draft|compare` parse Claude's structured output into typed JSON. All endpoints are async, wrap errors as `JSONResponse(500)`. Entry point: `python run_api.py` (uvicorn, port 8000). No changes to Slack bot or agent layer. Added `fastapi` and `uvicorn[standard]` to `requirements.txt`.
+
+**V7-2** ✔ Next.js web UI — `web/` Next.js 15 App Router project (TypeScript, Tailwind v4). Dark sidebar layout (`gray-950` bg, `gray-900` sidebar, violet-500 accent). `CollectionSidebar` fetches from API with skeleton loader and refresh button. Six tab components: **Ask** (chat history, source pill badges), **Agent** (streaming SSE with step-by-step reasoning chain, abort/stop control, pulsing indicator), **Score** (color-coded 1–10 score, strengths/weaknesses grid), **Gaps** (hard/soft gap badges, priority recommendation), **Draft** (document card with inline `[EVIDENCE MISSING]` red highlighting, copy-to-clipboard), **Compare** (two-collection selector, parsed markdown table as real HTML table, complementary/divergences sections, bottom line callout). All tabs show SVG empty states. No external component libraries — all Tailwind. `src/lib/api.ts` is the typed fetch wrapper; SSE handled inline in `AgentTab` via `fetch` + `ReadableStream`.
 
 ## Known Fixes
 

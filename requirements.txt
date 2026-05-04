@@ -14,3 +14,5 @@ python-pptx
 beautifulsoup4
 msal
 msgraph-sdk
+fastapi
+uvicorn[standard]
