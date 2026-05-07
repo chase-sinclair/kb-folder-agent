@@ -28,7 +28,8 @@
       "Bash(npx tsc *)",
       "Bash(npm run *)",
       "Bash(curl -s http://localhost:3000)",
-      "Bash(curl -s http://localhost:3003)"
+      "Bash(curl -s http://localhost:3003)",
+      "Bash(curl *)"
     ]
   }
 }

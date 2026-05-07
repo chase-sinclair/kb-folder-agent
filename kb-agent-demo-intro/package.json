@@ -1,0 +1,11 @@
+{
+  "name": "kb-agent-demo-intro",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "npx --yes hyperframes@0.4.44 preview",
+    "check": "npx --yes hyperframes@0.4.44 lint && npx --yes hyperframes@0.4.44 validate && npx --yes hyperframes@0.4.44 inspect",
+    "render": "npx --yes hyperframes@0.4.44 render",
+    "publish": "npx --yes hyperframes@0.4.44 publish"
+  }
+}

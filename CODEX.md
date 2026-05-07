@@ -212,3 +212,16 @@ These are the first genuinely semantic issues surfaced by the Evaluation Center 
 - `summarize_recent_changes(days=3)` still does not use time-bounded version evidence. The eval harness measures current behavior but does not change that implementation.
 - OneDrive deletion handling remains unchanged.
 - Slack summaries intentionally report local artifact filenames only; they do not attempt to expose local filesystem paths inside Slack.
+
+## HyperFrames Demo Asset
+- Added a standalone HyperFrames project at `kb-agent-demo-intro/`.
+- Purpose:
+  - create a simple opening shot for product demos where a user clicks a folder and it opens into a dense spread of files
+- Files added/changed:
+  - `kb-agent-demo-intro/DESIGN.md`
+  - `kb-agent-demo-intro/index.html`
+- Cleanup:
+  - removed unused starter sub-compositions from `kb-agent-demo-intro/compositions/`
+- Validation:
+  - `npm run check` passes with 0 errors
+  - remaining warning is non-blocking: `index.html` is large enough that HyperFrames suggests splitting it into sub-compositions later

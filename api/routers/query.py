@@ -114,28 +114,25 @@ async def score(body: ScoreBody):
         # Extract composite score
         score_match = re.search(r"COMPOSITE:\s*(\d+)/10", raw)
         score_val = int(score_match.group(1)) if score_match else 0
+        summary = score_match.group(0) if score_match else ""
 
-        # Summary is everything before STRENGTHS (or CRITERIA)
-        first_section = re.search(r"\n(CRITERIA|STRENGTHS)\b", raw)
-        summary = raw[:first_section.start()].strip() if first_section else raw.strip()
+        # Normalise section headers: strip leading #, *, -, whitespace so we can split on bare names
+        normalised = re.sub(r"(?m)^[ \t]*(?:#{1,3}|-{3,}|\*{1,2})[ \t]*", "", raw)
 
-        # Extract STRENGTHS bullets
-        strengths: list[str] = []
-        strengths_match = re.search(r"STRENGTHS\s*\n(.*?)(?=\n[A-Z]+\s*\n|\Z)", raw, re.DOTALL)
-        if strengths_match:
-            for line in strengths_match.group(1).splitlines():
-                line = line.strip()
-                if line.startswith("•") or line.startswith("-"):
-                    strengths.append(line.lstrip("•- ").strip())
+        def _bullets_in_section(text: str, start: str, stops: list[str]) -> list[str]:
+            """Return bullet text between `start` heading and the first of `stops`."""
+            stop_pat = "|".join(re.escape(s) for s in stops)
+            m = re.search(rf"{re.escape(start)}\b(.*?)(?={stop_pat}|\Z)", text, re.DOTALL | re.IGNORECASE)
+            if not m:
+                return []
+            return [
+                line.lstrip("•*-– ").strip()
+                for line in m.group(1).splitlines()
+                if re.match(r"^[•*\-–]", line.strip()) and line.strip().lstrip("•*-– ").strip()
+            ]
 
-        # Extract WEAKNESSES bullets
-        weaknesses: list[str] = []
-        weaknesses_match = re.search(r"WEAKNESSES\s*\n(.*?)(?=\n[A-Z]+\s*\n|\Z)", raw, re.DOTALL)
-        if weaknesses_match:
-            for line in weaknesses_match.group(1).splitlines():
-                line = line.strip()
-                if line.startswith("•") or line.startswith("-"):
-                    weaknesses.append(line.lstrip("•- ").strip())
+        strengths = _bullets_in_section(normalised, "STRENGTHS", ["WEAKNESSES", "TO IMPROVE"])
+        weaknesses = _bullets_in_section(normalised, "WEAKNESSES", ["TO IMPROVE", "STRENGTHS"])
 
         return {
             "score": score_val,
