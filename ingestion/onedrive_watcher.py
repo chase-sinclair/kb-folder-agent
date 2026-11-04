@@ -350,8 +350,16 @@ async def start_onedrive_watcher() -> None:
     valid_prefix = ONEDRIVE_FOLDER
     purged_q = await purge_stale_quarantine(valid_prefix)
     purged_c = await purge_orphaned_chunks(valid_prefix)
-    purged_v = await purge_orphaned_qdrant_points(valid_prefix)
-    purged_m = await purge_chunks_for_missing_collections()
+    # Qdrant may not be up yet. These purges are housekeeping, and main.py
+    # gathers this coroutine with the Slack bot, so letting a connection error
+    # escape took the bot down with it. Skip the round and carry on; files that
+    # fail to ingest while Qdrant is cold are retried as TRANSIENT_ERROR.
+    purged_v = purged_m = 0
+    try:
+        purged_v = await purge_orphaned_qdrant_points(valid_prefix)
+        purged_m = await purge_chunks_for_missing_collections()
+    except Exception as exc:
+        log.warning("Skipping Qdrant startup cleanup (%s): %s", type(exc).__name__, exc)
     if purged_q or purged_c or purged_v or purged_m:
         log.info("Startup cleanup: %d quarantine, %d chunk DB, %d Qdrant point(s), %d missing-collection record(s) removed",
                  purged_q, purged_c, purged_v, purged_m)

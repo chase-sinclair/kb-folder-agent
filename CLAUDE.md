@@ -103,9 +103,9 @@ NOTION_DATABASE_ID      # Notion Tasks Tracker database ID (optional)
 
 **Collection routing**: `re.sub(r"[^a-z0-9]+", "_", folder.lower())` — camelCase folders with no separators produce no underscores (`PastPerformance` → `pastperformance`).
 
-**Ingestion pipeline**: Watcher detects changes → sha256 hash compared → changed chunks re-embedded → upserted to Qdrant with deterministic point IDs `abs(hash((file_path, chunk_index))) % 2**63` → `metadata.db` updated → version snapshot stored.
+**Ingestion pipeline**: Watcher detects changes → sha256 hash compared → changed chunks re-embedded → upserted to Qdrant with deterministic point IDs from `point_id()` in `vectordb_server.py` — sha256 of `file_path:chunk_index`, first 8 bytes mod `2**63` (never Python `hash()`, which is salted per process) → `metadata.db` updated → version snapshot stored.
 
-**Quarantine**: `LOCKED_FILE` retries 3× with backoff `[30, 120, 600]s`. `CORRUPT_FILE`, `TOO_LARGE`, `UNSUPPORTED_TYPE` quarantine immediately.
+**Quarantine**: `LOCKED_FILE` and `TRANSIENT_ERROR` retry 3× with backoff `[30, 120, 600]s` — `classify_exception()` routes 429/5xx, connection resets and timeouts to `TRANSIENT_ERROR`. `CORRUPT_FILE`, `TOO_LARGE`, `UNSUPPORTED_TYPE` quarantine immediately.
 
 ## Chunking Strategy
 
@@ -146,6 +146,7 @@ All timestamps: ISO 8601 UTC.
 | `/kb score <folder> "<requirement>"` | Score KB readiness against an RFP requirement (1–10 scale) |
 | `/kb gaps <folder> "<topic>"` | Gap analysis: hard vs soft gaps relative to a topic |
 | `/kb clear-quarantine <folder> <filename>` | Remove file from quarantine |
+| `/kb clear-quarantine-all` | Clear every quarantine entry |
 | `/kb agent <question>` | Multi-step agentic query with live tool-use reasoning posted to channel |
 | `/kb eval [all\|case <id>\|task-type <type>\|collection <folder>] [judge]` | Run evaluation suite against KB benchmark |
 | `/kb eval-report` | Show the latest saved evaluation summary |
@@ -171,7 +172,7 @@ All timestamps: ISO 8601 UTC.
 **Polish D** ✔ README.md with full setup guide and command reference.
 **V2-1** ✔ Multi-collection search — `search_all_collections()` + `/kb ask all`.
 **V2-2** ✔ Agent-inferred routing — `infer_collection()` scores top-1 per collection; `INFERENCE_CONFIDENCE_THRESHOLD=0.35`.
-**V2-3** ✔ Version snapshots + diffs — `file_versions` table; `summarize_diff()` via difflib + Claude; `/kb diff`.
+**V2-3** ✔ Version snapshots + diffs — `file_versions` table; `summarize_diff()` via difflib + Claude; `/kb diff`. Written by **both** watchers (local since V2-3, OneDrive since 2026-11-04) for `.md`, `.txt`, `.pdf`, `.docx` only; other types index without snapshots and `/kb diff` reports no history for them.
 **V2-4** ✔ Richer file types — `.pptx`, `.eml`, `.html` chunkers; python-pptx, beautifulsoup4.
 **V2-5** ✔ Scheduled digest — `agent/digest.py`; daily Slack post via `DIGEST_ENABLED/DIGEST_TIME/DIGEST_CHANNEL`.
 
@@ -220,3 +221,19 @@ All timestamps: ISO 8601 UTC.
 **Transient Qdrant errors misclassified as CORRUPT_FILE** — Qdrant 503/429/500 responses and `aiohttp` connection/timeout errors were caught by the generic `except Exception` handler and quarantined permanently. Added `ErrorType.TRANSIENT_ERROR` to `ingestion/quarantine.py`; added it to `RETRYABLE_ERRORS` so it gets the same 3-retry backoff as `LOCKED_FILE`. Both watchers now detect `UnexpectedResponse` with status 503/429/500 and `aiohttp` connection/timeout errors and route them to `TRANSIENT_ERROR` instead of `CORRUPT_FILE`.
 
 **SQLite `database is locked` under concurrent access** — `aiosqlite.connect()` had no timeout, so concurrent writers (watcher + Slack handler) would immediately raise `OperationalError: database is locked`. Fixed in `storage/db.py`: `aiosqlite.connect(DB_PATH, timeout=30)` — SQLite will now retry for up to 30 seconds before raising.
+
+**Slack rejected long answers outright** — Slack caps a section block at 3000 characters and a message at 50 blocks, and model output routinely crossed both. `slack/bot.py` now splits text into section blocks on paragraph then line boundaries (`_split_text`/`_text_sections`), caps block count (`_cap_blocks`), and `_safe_post()` retries as plain text if Slack still rejects the Block Kit payload. `_friendly_error()` keeps raw API payloads in the log rather than the channel.
+
+**`/kb list` took ~15 seconds on the OneDrive backend** — Three causes, all in `mcp_servers/onedrive_server.py`. Every HTTP call re-read and re-deserialised the on-disk MSAL cache and asked MSAL for a token: `get_token()` now caches in-process with a 5-minute early renewal. Each call also paid a fresh TLS handshake: `_session()` pools one `requests.Session` per thread and `_pool()` reuses a single process-wide `ThreadPoolExecutor` (a per-call executor discarded the warm connections with its threads). Finally `get_folder_list()` in `agent/orchestrator.py` ran the blocking `list_folders()` inline, stalling the event loop past Slack's 3s socket-mode ack deadline; it now goes through `asyncio.to_thread`.
+
+**Graph and SharePoint transience quarantined healthy files** — `requests` defaulted to no timeout, so a stalled read became a multi-minute hang, and any 503 or connection reset was read as a bad file. `_request()` adds `(10, 60)` connect/read timeouts, 3 attempts with `[1, 3, 8]s` backoff on `{429, 500, 502, 503, 504}` and connection errors, and one forced token refresh on 401. `_download_to_temp()` wraps the whole transfer in that retry, not just the request: resets arrive mid-stream after healthy headers, leaving a partial temp file that would otherwise be chunked as if it were the real document. `classify_exception()` in `ingestion/quarantine.py` is the single place that decides transient vs. corrupt, and deliberately settles `requests.RequestException` as `CORRUPT_FILE` because every one of them subclasses `OSError` and would otherwise retry forever.
+
+**Qdrant point IDs changed on every restart** — Point IDs came from `abs(hash((file_path, chunk_index)))`, but CPython salts `str` hashing per process, so the same chunk got a new ID after each restart and re-ingest left the old points behind as orphans. `point_id()` in `mcp_servers/vectordb_server.py` now derives the ID from sha256. Both watchers use it, and the OneDrive watcher deletes a file's existing points before upserting so legacy randomised IDs get cleared.
+
+**Quarantine retry counts never advanced** — `increment_retry()` UPDATEd a row that did not exist yet, so `retry_count` stayed at 0 and backoff never progressed. `record_retry()` INSERTs instead and returns the new count, leaving `status = 'retrying'` so `is_quarantined()` keeps letting the file through. `clear_quarantine()` now returns rows cleared (so `/kb clear-quarantine` can report an honest miss) and resets `retry_count`; `find_quarantined_path()` matches on the path tail case-insensitively, because the stored prefix differs per backend and the folder the user types may differ in case.
+
+**`/kb changes` summarised document text, not changes** — It vector-searched the collection for "What changed or was updated recently", which retrieves documents that talk about change rather than files that changed. `_collection_activity()` in `agent/rag.py` now reads `chunks.last_ingested_at` and `file_versions.captured_at` from `metadata.db` directly, falls back to the most recent files when the window is empty, and `_SYSTEM_CHANGES` instructs Claude to report indexing activity only.
+
+**OneDrive backend wrote no version snapshots** — Snapshots were written only by `ingestion/watcher.py`, so under `BACKEND=onedrive` the `file_versions` table stayed empty and `summarize_diff()` always returned "Not enough version history to compare." `ingestion/onedrive_watcher.py` gained `get_latest_version_hash()`, `store_version_snapshot()` and `_extract_text_for_snapshot(local_path, original_name)` (the download lands in a temp file, so extraction keys off the OneDrive filename for its extension), snapshotting after the hash-change check and before chunking while the temp file still exists. Guarded by `try/except` + `log.warning` so a snapshot failure can never quarantine the file.
+
+**A cold Qdrant at startup killed the Slack bot** — `start_watcher()` / `start_onedrive_watcher()` called `purge_orphaned_qdrant_points()` and `purge_chunks_for_missing_collections()` unguarded, and `main.py` gathers those coroutines with `start_bot()`. With Qdrant stopped, `ResponseHandlingException: All connection attempts failed` propagated out of `asyncio.gather` and took the whole process down seconds after "Bolt app is running!". Both watchers now wrap just those two Qdrant purges, log a warning and continue with zero counts; files that fail to ingest while Qdrant is cold are retried as `TRANSIENT_ERROR`.
