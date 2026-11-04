@@ -12,13 +12,15 @@ from dotenv import load_dotenv
 from ingestion.chunker import UnsupportedFileTypeError, chunk_file
 from ingestion.embedder import embed_chunks
 from ingestion.quarantine import (
+    MAX_RETRIES,
+    RETRYABLE_ERRORS,
     ErrorType,
-    increment_retry,
+    classify_exception,
     is_quarantined,
     purge_orphaned_chunks,
     purge_stale_quarantine,
     quarantine_file,
-    should_retry,
+    record_retry,
 )
 from storage.db import get_db, init_db
 
@@ -61,6 +63,69 @@ def _compute_hash_from_bytes(data: bytes) -> str:
 # Qdrant helpers  (mirrors watcher.py)
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Version snapshot helpers
+#
+# Mirrors ingestion/watcher.py. Kept local rather than imported, because
+# watcher.py reads os.environ["WATCHED_FOLDER"] at import time and that is not
+# set on an OneDrive-only install.
+# ---------------------------------------------------------------------------
+
+async def get_latest_version_hash(file_path: str) -> str | None:
+    async with get_db() as db:
+        async with db.execute(
+            "SELECT file_hash FROM file_versions WHERE file_path = ? "
+            "ORDER BY version_index DESC LIMIT 1",
+            (file_path,),
+        ) as cursor:
+            row = await cursor.fetchone()
+    return row[0] if row else None
+
+
+async def store_version_snapshot(file_path: str, content: str, file_hash: str) -> None:
+    now = datetime.now(timezone.utc).isoformat()
+    async with get_db() as db:
+        async with db.execute(
+            "SELECT COALESCE(MAX(version_index), -1) FROM file_versions WHERE file_path = ?",
+            (file_path,),
+        ) as cursor:
+            row = await cursor.fetchone()
+        next_index = row[0] + 1
+        await db.execute(
+            "INSERT INTO file_versions (file_path, version_index, content_snapshot, file_hash, captured_at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (file_path, next_index, content, file_hash, now),
+        )
+        await db.execute(
+            "DELETE FROM file_versions WHERE file_path = ? AND version_index <= ?",
+            (file_path, next_index - 5),
+        )
+        await db.commit()
+    log.debug("Stored version %d snapshot for %s", next_index, file_path)
+
+
+def _extract_text_for_snapshot(local_path: str, original_name: str) -> str | None:
+    """Plain-text snapshot of a downloaded file, keyed off the OneDrive name.
+
+    local_path is a temp file; original_name carries the real extension.
+    """
+    suffix = Path(original_name).suffix.lower()
+    try:
+        if suffix in {".txt", ".md"}:
+            return Path(local_path).read_text(encoding="utf-8", errors="replace")
+        if suffix == ".pdf":
+            import pdfplumber
+            with pdfplumber.open(local_path) as pdf:
+                return "\n".join(page.extract_text() or "" for page in pdf.pages)
+        if suffix == ".docx":
+            from docx import Document
+            doc = Document(local_path)
+            return "\n".join(p.text for p in doc.paragraphs)
+    except Exception as exc:
+        log.debug("Could not extract snapshot text for %s: %s", original_name, exc)
+    return None
+
+
 async def _ensure_collection(client, collection_name: str) -> None:
     from qdrant_client.models import Distance, SparseIndexParams, SparseVectorParams, VectorParams
     from mcp_servers.vectordb_server import SPARSE_VECTOR_NAME
@@ -88,6 +153,17 @@ async def _ensure_collection(client, collection_name: str) -> None:
             raise
 
 
+async def _delete_file_from_qdrant(client, collection_name: str, file_path: str) -> None:
+    from qdrant_client.models import FieldCondition, Filter, MatchValue
+
+    await client.delete(
+        collection_name=collection_name,
+        points_selector=Filter(
+            must=[FieldCondition(key="file_path", match=MatchValue(value=file_path))]
+        ),
+    )
+
+
 # ---------------------------------------------------------------------------
 # Core ingestion
 # ---------------------------------------------------------------------------
@@ -102,13 +178,21 @@ async def ingest_onedrive_file(file_path: str, folder_name: str) -> None:
         return
 
     async def handle_error(exc: Exception, error_type: ErrorType) -> None:
-        retry_count = 0
-        if should_retry(error_type, retry_count):
-            await increment_retry(file_path)
-            log.warning("Retryable error for %s (%s): %s", file_path, error_type.value, exc)
-        else:
-            await quarantine_file(file_path, error_type, str(exc))
-            log.error("Quarantined %s (%s): %s", file_path, error_type.value, exc)
+        detail = f"{type(exc).__name__}: {exc}"
+        if error_type in RETRYABLE_ERRORS:
+            attempts = await record_retry(file_path, error_type, detail)
+            if attempts <= MAX_RETRIES:
+                log.warning(
+                    "Retryable error for %s (%s, attempt %d/%d): %s",
+                    file_path, error_type.value, attempts, MAX_RETRIES, detail,
+                    exc_info=exc,
+                )
+                return
+            log.error(
+                "Giving up on %s after %d attempts (%s)", file_path, attempts - 1, error_type.value
+            )
+        await quarantine_file(file_path, error_type, detail)
+        log.error("Quarantined %s (%s): %s", file_path, error_type.value, detail, exc_info=exc)
 
     tmp_path = None
     try:
@@ -145,6 +229,18 @@ async def ingest_onedrive_file(file_path: str, folder_name: str) -> None:
         Path(tmp_path).unlink(missing_ok=True)
         tmp_path = await asyncio.to_thread(_write_named_tmp)
 
+        # Version snapshot before chunking, while the temp file still exists.
+        # Failures here must not block ingestion or quarantine the file.
+        try:
+            if await get_latest_version_hash(file_path) != file_hash:
+                snapshot_text = await asyncio.to_thread(
+                    _extract_text_for_snapshot, tmp_path, file_path
+                )
+                if snapshot_text is not None:
+                    await store_version_snapshot(file_path, snapshot_text, file_hash)
+        except Exception as exc:
+            log.warning("Version snapshot failed for %s: %s", file_path, exc)
+
         chunks = await asyncio.to_thread(chunk_file, tmp_path)
         Path(tmp_path).unlink(missing_ok=True)
         tmp_path = None
@@ -158,13 +254,18 @@ async def ingest_onedrive_file(file_path: str, folder_name: str) -> None:
         # All chunks are "changed" since we compare at file-hash level
         embedded = await embed_chunks(chunks)
 
-        from mcp_servers.vectordb_server import SPARSE_VECTOR_NAME, build_sparse_vector
+        from mcp_servers.vectordb_server import SPARSE_VECTOR_NAME, build_sparse_vector, point_id
         client = AsyncQdrantClient(url=QDRANT_URL)
         try:
             await _ensure_collection(client, collection_name)
+            # Every chunk is re-embedded here (hash-level comparison), so drop the
+            # file's existing points first: that clears both legacy points written
+            # under the old randomised IDs and any chunks a shrinking file no
+            # longer has.
+            await _delete_file_from_qdrant(client, collection_name, file_path)
             points = [
                 PointStruct(
-                    id=abs(hash((file_path, item["chunk_index"]))) % (2**63),
+                    id=point_id(file_path, item["chunk_index"]),
                     vector={
                         "": item["embedding"],
                         SPARSE_VECTOR_NAME: build_sparse_vector(item["content"]),
@@ -174,6 +275,7 @@ async def ingest_onedrive_file(file_path: str, folder_name: str) -> None:
                         "metadata": item["metadata"],
                         "chunk_type": item["chunk_type"],
                         "file_path": file_path,
+                        "chunk_index": item["chunk_index"],
                     },
                 )
                 for item in embedded
@@ -212,14 +314,7 @@ async def ingest_onedrive_file(file_path: str, folder_name: str) -> None:
         else:
             await handle_error(exc, ErrorType.CORRUPT_FILE)
     except Exception as exc:
-        from qdrant_client.http.exceptions import UnexpectedResponse
-        import aiohttp
-        if isinstance(exc, UnexpectedResponse) and exc.status_code in (503, 429, 500):
-            await handle_error(exc, ErrorType.TRANSIENT_ERROR)
-        elif isinstance(exc, (aiohttp.ClientConnectionError, aiohttp.ServerTimeoutError, TimeoutError)):
-            await handle_error(exc, ErrorType.TRANSIENT_ERROR)
-        else:
-            await handle_error(exc, ErrorType.CORRUPT_FILE)
+        await handle_error(exc, classify_exception(exc))
     finally:
         if tmp_path:
             Path(tmp_path).unlink(missing_ok=True)

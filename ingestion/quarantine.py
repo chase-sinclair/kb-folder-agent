@@ -30,6 +30,77 @@ def should_retry(error_type: ErrorType, retry_count: int) -> bool:
     return error_type in RETRYABLE_ERRORS and retry_count < MAX_RETRIES
 
 
+_TRANSIENT_MARKERS = (
+    "connection aborted",
+    "connection reset",
+    "forcibly closed",
+    "timed out",
+    "timeout",
+    "service unavailable",
+    "temporarily unavailable",
+    "bad gateway",
+    "too many requests",
+    " 429",
+    " 500",
+    " 502",
+    " 503",
+    " 504",
+)
+
+
+def classify_exception(exc: Exception) -> ErrorType:
+    """Map an ingestion exception to an ErrorType.
+
+    Network and upstream-service failures are TRANSIENT_ERROR (retried); only a
+    genuinely unreadable or unparseable file should end up as CORRUPT_FILE.
+    """
+    try:
+        from qdrant_client.http.exceptions import UnexpectedResponse
+
+        if isinstance(exc, UnexpectedResponse) and exc.status_code in (429, 500, 502, 503, 504):
+            return ErrorType.TRANSIENT_ERROR
+    except Exception:
+        pass
+
+    try:
+        import requests.exceptions as rexc
+
+        if isinstance(exc, (rexc.ConnectionError, rexc.Timeout, rexc.ChunkedEncodingError)):
+            return ErrorType.TRANSIENT_ERROR
+        if isinstance(exc, rexc.HTTPError):
+            status = getattr(getattr(exc, "response", None), "status_code", None)
+            if status in (429, 500, 502, 503, 504):
+                return ErrorType.TRANSIENT_ERROR
+            if status is not None:
+                # 400/401/403/404 will not fix themselves; retrying just delays
+                # the report.
+                return ErrorType.CORRUPT_FILE
+        if isinstance(exc, rexc.RequestException):
+            # Every requests exception subclasses OSError, so any that reached
+            # here has to be settled now: the generic OSError check below would
+            # otherwise read it as a network blip and retry it forever.
+            return ErrorType.CORRUPT_FILE
+    except ImportError:
+        pass
+
+    try:
+        import aiohttp
+
+        if isinstance(exc, (aiohttp.ClientConnectionError, aiohttp.ServerTimeoutError)):
+            return ErrorType.TRANSIENT_ERROR
+    except Exception:
+        pass
+
+    if isinstance(exc, (TimeoutError, ConnectionError, OSError)):
+        return ErrorType.TRANSIENT_ERROR
+
+    text = f" {exc} ".lower()
+    if any(marker in text for marker in _TRANSIENT_MARKERS):
+        return ErrorType.TRANSIENT_ERROR
+
+    return ErrorType.CORRUPT_FILE
+
+
 async def quarantine_file(file_path: str, error_type: ErrorType, error_message: str) -> None:
     file_path = normalize_path(file_path)
     async with get_db() as db:
@@ -69,6 +140,34 @@ async def increment_retry(file_path: str) -> None:
         await db.commit()
 
 
+async def record_retry(file_path: str, error_type: ErrorType, error_message: str) -> int:
+    """Persist a retryable failure and return the new attempt count.
+
+    Status stays 'retrying' so is_quarantined() keeps letting the file through on
+    the next pass. increment_retry() alone could not do this: it UPDATEs a row
+    that does not exist yet, so retry_count never left 0.
+    """
+    file_path = normalize_path(file_path)
+    async with get_db() as db:
+        async with db.execute(
+            "SELECT retry_count, quarantined_at FROM quarantine WHERE file_path = ?", (file_path,)
+        ) as cursor:
+            row = await cursor.fetchone()
+        count = (row["retry_count"] if row else 0) + 1
+        first_seen = row["quarantined_at"] if row else _now()
+        await db.execute(
+            """
+            INSERT OR REPLACE INTO quarantine
+                (file_path, error_type, error_message, retry_count, quarantined_at,
+                 last_attempted_at, status)
+            VALUES (?, ?, ?, ?, ?, ?, 'retrying')
+            """,
+            (file_path, error_type.value, error_message, count, first_seen, _now()),
+        )
+        await db.commit()
+    return count
+
+
 async def is_quarantined(file_path: str) -> bool:
     file_path = normalize_path(file_path)
     async with get_db() as db:
@@ -79,18 +178,39 @@ async def is_quarantined(file_path: str) -> bool:
             return await cursor.fetchone() is not None
 
 
-async def clear_quarantine(file_path: str) -> None:
+async def clear_quarantine(file_path: str) -> int:
+    """Clear one file. Returns the number of rows actually cleared (0 = no match)."""
     file_path = normalize_path(file_path)
     async with get_db() as db:
-        await db.execute(
+        cursor = await db.execute(
             """
             UPDATE quarantine
-            SET status = 'cleared', last_attempted_at = ?
-            WHERE file_path = ?
+            SET status = 'cleared', retry_count = 0, last_attempted_at = ?
+            WHERE file_path = ? AND status != 'cleared'
             """,
             (_now(), file_path),
         )
         await db.commit()
+        return cursor.rowcount or 0
+
+
+async def find_quarantined_path(folder_name: str, filename: str) -> str | None:
+    """Locate a stored quarantine path by folder/filename, ignoring root prefix and case.
+
+    The stored prefix depends on the active backend (a Windows path for local, the
+    OneDrive root for onedrive), so matching on the tail is what makes the Slack
+    command work under either one.
+    """
+    needle = f"/{normalize_path(folder_name).strip('/')}/{filename}".lower()
+    async with get_db() as db:
+        async with db.execute(
+            "SELECT file_path FROM quarantine WHERE status != 'cleared'"
+        ) as cursor:
+            rows = await cursor.fetchall()
+    for row in rows:
+        if normalize_path(row["file_path"]).lower().endswith(needle):
+            return row["file_path"]
+    return None
 
 
 async def clear_all_quarantine() -> int:
@@ -98,7 +218,7 @@ async def clear_all_quarantine() -> int:
         async with db.execute("SELECT COUNT(*) FROM quarantine WHERE status = 'quarantined'") as cursor:
             row = await cursor.fetchone()
             count = row[0]
-        await db.execute("UPDATE quarantine SET status = 'cleared', last_attempted_at = ? WHERE status = 'quarantined'", (_now(),))
+        await db.execute("UPDATE quarantine SET status = 'cleared', retry_count = 0, last_attempted_at = ? WHERE status != 'cleared'", (_now(),))
         await db.commit()
     return count
 

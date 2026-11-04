@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 import re
@@ -36,7 +37,10 @@ async def get_available_collections() -> list[dict]:
 
 async def get_folder_list() -> list[dict]:
     try:
-        return list_folders()
+        # Both backends expose list_folders() synchronously, and the OneDrive one
+        # is a blocking Graph API call. Running it inline stalls the event loop,
+        # which delays Slack's socket-mode ack past its 3s deadline.
+        return await asyncio.to_thread(list_folders)
     except Exception as exc:
         log.error("get_folder_list failed: %s", exc)
         raise

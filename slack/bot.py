@@ -25,7 +25,12 @@ from evals.config import REPORTS_DIR, RESULTS_DIR
 from evals.report import write_json_report, write_markdown_report
 from evals.runner import run_evaluations
 from evals.schema import EvalRunConfig
-from ingestion.quarantine import clear_all_quarantine, clear_quarantine, get_quarantined_files
+from ingestion.quarantine import (
+    clear_all_quarantine,
+    clear_quarantine,
+    find_quarantined_path,
+    get_quarantined_files,
+)
 from storage.db import init_db
 
 load_dotenv()
@@ -175,6 +180,7 @@ def _build_eval_summary_blocks(summary, header_text: str, *, latest: bool = Fals
             "retrieval_quality": summary.retrieval_quality,
             "expected_fact_coverage": summary.expected_fact_coverage,
             "format_compliance": summary.format_compliance,
+            "citation_presence": summary.citation_presence,
             "judge_enabled": summary.judge_enabled,
             "hallucination_risk": summary.hallucination_risk,
             "recommendations": summary.recommendations,
@@ -196,6 +202,11 @@ def _build_eval_summary_blocks(summary, header_text: str, *, latest: bool = Fals
             f"*Retrieval:* {summary_data['retrieval_quality']:.0%}   "
             f"*Facts:* {summary_data['expected_fact_coverage']:.0%}   "
             f"*Format:* {summary_data['format_compliance']:.0%}"
+            + (
+                f"   *Citations:* {summary_data['citation_presence']:.0%}"
+                if summary_data.get("citation_presence") is not None
+                else ""
+            )
         ),
         _context(
             f"Judge enabled: {'yes' if summary_data['judge_enabled'] else 'no'}"
@@ -301,13 +312,122 @@ def _error_blocks(message: str) -> tuple[str, list]:
     return message, [_section(message)]
 
 
+# Slack rejects a section block whose text exceeds 3000 chars, and any message
+# carrying more than 50 blocks. Model answers routinely cross the first limit.
+SECTION_TEXT_LIMIT = 2800
+MAX_BLOCKS = 50
+
+
+def _hard_split(piece: str, limit: int) -> list[str]:
+    return [piece[i:i + limit] for i in range(0, len(piece), limit)]
+
+
+def _split_text(text: str, limit: int = SECTION_TEXT_LIMIT) -> list[str]:
+    """Break text into <=limit pieces, preferring paragraph then line boundaries."""
+    text = (text or "").strip()
+    if not text:
+        return []
+    if len(text) <= limit:
+        return [text]
+
+    para_sep = "\n\n"
+    units: list[str] = []
+    for para in text.split(para_sep):
+        if len(para) <= limit:
+            units.append(para)
+            continue
+        buf = ""
+        for line in para.split("\n"):
+            candidate = line if not buf else buf + "\n" + line
+            if len(candidate) <= limit:
+                buf = candidate
+                continue
+            if buf:
+                units.append(buf)
+                buf = ""
+            if len(line) <= limit:
+                buf = line
+            else:
+                units.extend(_hard_split(line, limit))
+        if buf:
+            units.append(buf)
+
+    chunks: list[str] = []
+    buf = ""
+    for unit in units:
+        candidate = unit if not buf else buf + para_sep + unit
+        if len(candidate) <= limit:
+            buf = candidate
+        else:
+            if buf:
+                chunks.append(buf)
+            buf = unit
+    if buf:
+        chunks.append(buf)
+    return chunks
+
+
+def _text_sections(text: str) -> list[dict]:
+    """Render model output as section blocks Slack will accept."""
+    return [_section(chunk) for chunk in _split_text(clean_for_slack(text))]
+
+
+def _cap_blocks(blocks: list[dict]) -> list[dict]:
+    if len(blocks) <= MAX_BLOCKS:
+        return blocks
+    kept = blocks[:MAX_BLOCKS - 1]
+    kept.append(_context("Response truncated to fit Slack's 50-block limit."))
+    return kept
+
+
+def _friendly_error(exc: Exception) -> str:
+    """User-facing error text. Raw Slack API payloads are logged, never shown."""
+    name = type(exc).__name__
+    text = str(exc)
+    if "invalid_blocks" in text or "SlackApiError" in name:
+        return "I could not format that response for Slack. Details are in the server log."
+    detail = text.splitlines()[0][:160] if text else ""
+    suffix = f" ({detail})" if detail else ""
+    return f"An error occurred{suffix}. Try `/kb` for usage help."
+
+
+async def _safe_post(sender, text: str, blocks: list[dict], **kwargs):
+    """Post blocks, falling back to plain text if Slack rejects the Block Kit payload."""
+    try:
+        return await sender(text=text, blocks=_cap_blocks(blocks), **kwargs)
+    except Exception as exc:
+        log.error("Block post failed, retrying as plain text: %s", exc)
+        plain = text if len(text) <= 2900 else text[:2900] + "\n... (truncated)"
+        try:
+            return await sender(text=plain, **kwargs)
+        except Exception as fallback_exc:
+            log.error("Plain-text fallback also failed: %s", fallback_exc)
+            return None
+
+
+def _kb_root() -> str:
+    """Root prefix that stored file_paths carry, for the active backend."""
+    if os.environ.get("BACKEND", "local") == "onedrive":
+        return normalize_path(os.environ.get("ONEDRIVE_FOLDER", "test-kb")).rstrip("/")
+    from ingestion.watcher import WATCHED_FOLDER
+
+    return normalize_path(str(WATCHED_FOLDER)).rstrip("/")
+
+
+def _kb_file_path(folder_name: str, filename: str) -> str:
+    return f"{_kb_root()}/{folder_name}/{filename}"
+
+
 # ---------------------------------------------------------------------------
 # Response formatters — return (fallback_text, blocks)
 # ---------------------------------------------------------------------------
 
 async def _handle_list() -> tuple[str, list]:
-    folders = await get_folder_list()
-    collections = await get_available_collections()
+    # Independent calls — one hits the backend (Graph API or disk), the other
+    # Qdrant — so run them together rather than back to back.
+    folders, collections = await asyncio.gather(
+        get_folder_list(), get_available_collections()
+    )
     counts = {c["name"]: c.get("vector_count", 0) for c in collections}
 
     if not folders:
@@ -346,7 +466,7 @@ async def _handle_ask(folder_name: str, query: str) -> tuple[str, list]:
 
         if folder_name.lower() == "all":
             result = await answer_query_all(query)
-            blocks = [_header("💬 All Knowledge Bases"), _divider(), _section(clean_for_slack(result["answer"]))]
+            blocks = [_header("💬 All Knowledge Bases"), _divider(), *_text_sections(result["answer"])]
             return "💬 All Knowledge Bases", blocks
 
         collection_name = folder_to_collection_name(folder_name)
@@ -358,7 +478,7 @@ async def _handle_ask(folder_name: str, query: str) -> tuple[str, list]:
     blocks = [
         _header(f"💬 {folder_name}"),
         _divider(),
-        _section(clean_for_slack(result.answer)),
+        *_text_sections(result.answer),
     ]
     if inferred_label:
         blocks.append(_divider())
@@ -382,7 +502,7 @@ async def _handle_changes(folder_name: str) -> tuple[str, list]:
     blocks = [
         _header(f"🕐 Recent Changes — {folder_name}"),
         _divider(),
-        _section(clean_for_slack(result.answer)),
+        *_text_sections(result.answer),
         _divider(),
         _context(f"📄 Sources: {', '.join(result.sources)}" if result.sources else "📄 No sources"),
     ]
@@ -406,7 +526,11 @@ async def _handle_status() -> tuple[str, list]:
     blocks.append(_section(f"*Quarantined Files:* {len(quarantined)}"))
     if quarantined:
         for q in quarantined:
-            blocks.append(_context(f"⚠️ `{normalize_path(q['file_path'])}` — {q['error_type']}"))
+            reason = (q.get("error_message") or "").strip().splitlines()
+            detail = f" - _{reason[0][:140]}_" if reason else ""
+            blocks.append(
+                _context(f"⚠️ `{normalize_path(q['file_path'])}` — {q['error_type']}{detail}")
+            )
     else:
         blocks.append(_context("✅ No quarantined files"))
 
@@ -417,9 +541,20 @@ async def _handle_clear_quarantine(folder_name: str, filename: str) -> tuple[str
     if not folder_name or not filename:
         return _error_blocks("Usage: `/kb clear-quarantine <FolderName> <filename>`")
 
-    from ingestion.watcher import WATCHED_FOLDER
-    file_path = normalize_path(str(WATCHED_FOLDER / folder_name / filename))
-    await clear_quarantine(file_path)
+    cleared = await clear_quarantine(_kb_file_path(folder_name, filename))
+    if not cleared:
+        # Stored paths carry the active backend's root prefix, and the folder the
+        # user typed may differ in case, so fall back to matching on the tail.
+        resolved = await find_quarantined_path(folder_name, filename)
+        if resolved:
+            cleared = await clear_quarantine(resolved)
+
+    if not cleared:
+        return _error_blocks(
+            f"No quarantined entry found for `{filename}` in `{folder_name}`. "
+            "Check `/kb status` for the exact folder and filename."
+        )
+
     msg = f"✅ Cleared quarantine for `{filename}` in `{folder_name}`."
     return msg, [_section(msg)]
 
@@ -434,8 +569,7 @@ async def _handle_diff(folder_name: str, filename: str) -> tuple[str, list]:
     if not folder_name or not filename:
         return _error_blocks("Usage: `/kb diff <FolderName> <filename>`")
 
-    from ingestion.watcher import WATCHED_FOLDER
-    file_path = normalize_path(str(WATCHED_FOLDER / folder_name / filename))
+    file_path = _kb_file_path(folder_name, filename)
     result = await summarize_diff(file_path)
     blocks = [
         _header(f"🔍 Document Diff — {filename}"),
@@ -481,9 +615,7 @@ async def _handle_draft(folder_name: str, requirement: str) -> tuple[str, list]:
         _divider(),
     ]
 
-    # One section block per paragraph to stay within Slack's 3000-char limit
-    for para in (p.strip() for p in body_text.split("\n\n") if p.strip()):
-        blocks.append(_section(clean_for_slack(para)))
+    blocks.extend(_text_sections(body_text))
 
     blocks.append(_divider())
     if coverage_line:
@@ -533,7 +665,7 @@ async def _handle_compare(folder1: str, rest: str) -> tuple[str, list]:
     if direct_answer:
         blocks.append(_section(f"_{direct_answer}_"))
     blocks.append(_divider())
-    blocks.append(_section(clean_for_slack(body_text)))
+    blocks.extend(_text_sections(body_text))
 
     overlap = result.get("overlap_files", [])
     if overlap:
@@ -581,7 +713,7 @@ async def _handle_score(folder_name: str, requirement: str) -> tuple[str, list]:
     if composite_line:
         blocks.append(_section(f"*{composite_line}*"))
     blocks.append(_divider())
-    blocks.append(_section(clean_for_slack(body_text)))
+    blocks.extend(_text_sections(body_text))
     blocks.append(_divider())
     blocks.append(_context(f"📄 Evaluated against {result.result_count} chunk(s) from {len(result.sources)} source(s)"))
 
@@ -605,7 +737,7 @@ async def _handle_gaps(folder_name: str, topic: str) -> tuple[str, list]:
     blocks = [
         _header(f"🔍 Gaps — {folder_name} vs \"{topic}\""),
         _divider(),
-        _section(clean_for_slack(result.answer)),
+        *_text_sections(result.answer),
         _divider(),
         _context(f"📄 Analyzed {result.result_count} chunk(s) from {len(result.sources)} source(s)"),
     ]
@@ -708,11 +840,12 @@ async def handle_thread_reply(event, client):
         if re.match(r"^ticket\b", user_text, re.IGNORECASE):
             rest = user_text[len("ticket"):].strip()
             fallback, blocks = await _handle_ticket(rest)
-            await client.chat_postMessage(
+            await _safe_post(
+                client.chat_postMessage,
+                fallback,
+                blocks,
                 channel=channel,
                 thread_ts=thread_ts,
-                text=fallback,
-                blocks=blocks,
             )
             return
 
@@ -724,13 +857,13 @@ async def handle_thread_reply(event, client):
         history = _build_thread_history(thread_msgs, _bot_id)
 
         rag_result = await answer_with_history(collection_name, history, user_text)
-        answer_text = clean_for_slack(rag_result.answer)
 
-        await client.chat_postMessage(
+        await _safe_post(
+            client.chat_postMessage,
+            rag_result.answer,
+            _text_sections(rag_result.answer),
             channel=channel,
             thread_ts=thread_ts,
-            text=rag_result.answer,
-            blocks=[_section(answer_text)],
         )
     except Exception as exc:
         log.error("Thread reply handler error in channel %s: %s", channel, exc)
@@ -812,25 +945,25 @@ async def _handle_agent_in_channel(question: str, say, respond) -> None:
     thread_ts = opener.get("ts") if opener else None
 
     async def post_step(text: str) -> None:
-        try:
-            await say(text=text, thread_ts=thread_ts)
-        except Exception as exc:
-            log.warning("Agent post_step failed: %s", exc)
+        # Tool results can be long, so step messages need the same splitting.
+        for piece in _split_text(text) or [text]:
+            try:
+                await say(text=piece, thread_ts=thread_ts)
+            except Exception as exc:
+                log.warning("Agent post_step failed: %s", exc)
 
     try:
         answer = await run_agent(question, _orch, post_step, max_rounds=3)
     except Exception as exc:
-        log.error("Agent run failed: %s", exc)
-        await say(
-            text=f"Agent error: {exc}",
-            blocks=[_section(f"❌ Agent error: {exc}")],
-            thread_ts=thread_ts,
-        )
+        log.error("Agent run failed: %s", exc, exc_info=exc)
+        message = _friendly_error(exc)
+        await _safe_post(say, message, [_section(message)], thread_ts=thread_ts)
         return
 
-    await say(
-        text=answer,
-        blocks=[_header("✅ Agent Answer"), _divider(), _section(clean_for_slack(answer))],
+    await _safe_post(
+        say,
+        answer,
+        [_header("Agent Answer"), _divider(), *_text_sections(answer)],
         thread_ts=thread_ts,
     )
 
@@ -889,21 +1022,21 @@ async def handle_kb(ack, respond, say, command):
         else:
             fallback, blocks = _help_blocks()
     except Exception as exc:
-        log.error("Error handling /kb %s: %s", subcommand, exc)
-        fallback, blocks = _error_blocks(f"An error occurred: {exc}\nTry `/kb` for usage help.")
+        log.error("Error handling /kb %s: %s", subcommand, exc, exc_info=exc)
+        fallback, blocks = _error_blocks(_friendly_error(exc))
 
     if subcommand == "ask":
         try:
-            await say(text=fallback, blocks=blocks)
+            await say(text=fallback, blocks=_cap_blocks(blocks))
+            return
         except Exception as exc:
             if "not_in_channel" in str(exc):
                 note = "\n\n_Tip: invite the bot to this channel with `/invite @<bot-name>` to enable threaded follow-ups._"
-                await respond(text=fallback + note, blocks=blocks)
-            else:
-                log.error("say() failed for /kb ask: %s", exc)
-                await respond(text=fallback, blocks=blocks)
-    else:
-        await respond(text=fallback, blocks=blocks)
+                await _safe_post(respond, fallback + note, blocks)
+                return
+            log.error("say() failed for /kb ask: %s", exc)
+
+    await _safe_post(respond, fallback, blocks)
 
 
 # ---------------------------------------------------------------------------

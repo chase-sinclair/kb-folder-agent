@@ -3,6 +3,7 @@ import difflib
 import logging
 import os
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import anthropic
@@ -30,11 +31,14 @@ _SYSTEM_ANSWER = (
 )
 
 _SYSTEM_CHANGES = (
-    "You are a knowledge base assistant. Summarize the recent changes, additions, or modifications "
-    "found in the provided context. Lead directly with the changes — do not open with phrases like "
-    "'Based on the provided context' or 'I can identify'. Use a short bulleted list. "
-    "If no recent changes are evident, say so in one sentence. "
-    "Do not mention duplicates, retrieval mechanics, or that you were given context."
+    "You are a knowledge base assistant reporting on indexing activity. You are given ingestion "
+    "records from the knowledge base's own metadata: file names, when each was last indexed, how "
+    "many chunks each holds, and how many version snapshots exist for it. Summarize what changed "
+    "and when. Lead directly with the changes - do not open with phrases like 'Based on the "
+    "provided context'. Use a short bulleted list, one line per file, and render timestamps as "
+    "plain UTC dates and times. Treat a file with more than one version snapshot as having been "
+    "revised, and say so. Describe only indexing activity - do not speculate about what the "
+    "documents say. Do not mention retrieval mechanics or that you were given context."
 )
 
 _SYSTEM_DIFF = (
@@ -547,29 +551,116 @@ async def find_gaps(collection_name: str, topic: str) -> RagResult:
         raise
 
 
-async def summarize_recent_changes(collection_name: str, days: int = 3) -> RagResult:
-    query = "What changed or was updated recently"
-    try:
-        results = await search(collection_name, query, top_k=TOP_K)
+async def _collection_activity(collection_name: str, days: int) -> dict:
+    """Indexing activity for a collection, straight from metadata.db.
 
-        if not results:
+    Change information lives in the metadata tables, not in the document text, so
+    this reads chunks.last_ingested_at and file_versions.captured_at instead of
+    running a vector search for the word "changed".
+    """
+    from storage.db import get_db
+
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    async with get_db() as db:
+        async with db.execute(
+            """
+            SELECT file_path,
+                   MAX(last_ingested_at) AS last_ingested,
+                   COUNT(*)              AS chunk_count
+            FROM chunks
+            WHERE collection_name = ?
+            GROUP BY file_path
+            ORDER BY last_ingested DESC
+            """,
+            (collection_name,),
+        ) as cursor:
+            files = [dict(row) for row in await cursor.fetchall()]
+
+        versions: dict[str, dict] = {}
+        if files:
+            placeholders = ",".join("?" * len(files))
+            async with db.execute(
+                f"""
+                SELECT file_path,
+                       COUNT(*)         AS version_count,
+                       MAX(captured_at) AS last_captured
+                FROM file_versions
+                WHERE file_path IN ({placeholders})
+                GROUP BY file_path
+                """,
+                [f["file_path"] for f in files],
+            ) as cursor:
+                versions = {row["file_path"]: dict(row) for row in await cursor.fetchall()}
+
+    for entry in files:
+        snapshot = versions.get(entry["file_path"], {})
+        entry["version_count"] = snapshot.get("version_count", 0)
+        entry["last_captured"] = snapshot.get("last_captured")
+
+    return {
+        "cutoff": cutoff,
+        "in_window": [f for f in files if (f["last_ingested"] or "") >= cutoff],
+        "all_files": files,
+    }
+
+
+def _format_activity(rows: list[dict]) -> str:
+    lines = []
+    for entry in rows:
+        parts = [
+            Path(entry["file_path"]).name,
+            f"last indexed {entry['last_ingested']}",
+            f"{entry['chunk_count']} chunk(s)",
+        ]
+        if entry.get("version_count"):
+            parts.append(
+                f"{entry['version_count']} version snapshot(s), latest {entry['last_captured']}"
+            )
+        lines.append("- " + " | ".join(parts))
+    return "\n".join(lines)
+
+
+async def summarize_recent_changes(collection_name: str, days: int = 3) -> RagResult:
+    try:
+        activity = await _collection_activity(collection_name, days)
+        rows = activity["in_window"]
+        within_window = bool(rows)
+
+        if not rows:
+            rows = activity["all_files"][:TOP_K]
+
+        if not rows:
             return RagResult(
-                answer="No recent changes were found in this knowledge base.",
+                answer=f"`{collection_name}` has no indexed files yet.",
                 sources=[],
                 collection_name=collection_name,
                 result_count=0,
             )
 
-        context = _build_context(results)
-        user_prompt = f"Context:\n{context}\n\nQuestion: {query}"
+        if within_window:
+            scope = (
+                f"These files in '{collection_name}' were added or re-indexed "
+                f"in the last {days} day(s)."
+            )
+        else:
+            scope = (
+                f"No files in '{collection_name}' were added or re-indexed in the last "
+                f"{days} day(s). Report that first, then describe the most recent indexing "
+                f"activity on record, shown below."
+            )
+
+        user_prompt = (
+            f"{scope}\n\n"
+            f"Current UTC time: {datetime.now(timezone.utc).isoformat()}\n\n"
+            f"Ingestion records:\n{_format_activity(rows)}"
+        )
         answer = await _call_claude(_SYSTEM_CHANGES, user_prompt)
 
         return RagResult(
             answer=answer,
-            sources=_unique_sources(results),
+            sources=[Path(entry["file_path"]).name for entry in rows],
             collection_name=collection_name,
-            result_count=len(results),
-            retrieved_items=_serialize_results(results, collection_name),
+            result_count=len(rows),
         )
     except Exception as exc:
         log.error("summarize_recent_changes failed for collection %r: %s", collection_name, exc)

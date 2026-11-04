@@ -1,3 +1,4 @@
+import hashlib
 import logging
 import math
 import os
@@ -27,6 +28,17 @@ QDRANT_URL = os.environ.get("QDRANT_URL", "http://localhost:6333")
 VECTOR_SIZE = 1536
 DISTANCE = Distance.COSINE
 SPARSE_VECTOR_NAME = "text-sparse"
+
+
+def point_id(file_path: str, chunk_index: int) -> int:
+    """Stable Qdrant point ID for a chunk.
+
+    Must not use hash(): CPython salts str hashing per process (PYTHONHASHSEED),
+    so the same chunk would get a new ID after every restart and re-ingest would
+    leave the old points behind as orphans instead of overwriting them.
+    """
+    digest = hashlib.sha256(f"{file_path}:{chunk_index}".encode("utf-8")).digest()
+    return int.from_bytes(digest[:8], "big") % (2**63)
 
 mcp = FastMCP("vectordb")
 

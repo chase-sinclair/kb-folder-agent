@@ -5,24 +5,24 @@ import os
 import re
 from pathlib import Path
 
-import aiohttp
 from dotenv import load_dotenv
-from qdrant_client.http.exceptions import UnexpectedResponse
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 
 from ingestion.chunker import UnsupportedFileTypeError, chunk_file
 from ingestion.embedder import embed_chunks
 from ingestion.quarantine import (
+    MAX_RETRIES,
+    RETRYABLE_ERRORS,
     ErrorType,
+    classify_exception,
     clear_quarantine,
-    increment_retry,
     is_quarantined,
     normalize_path,
     purge_orphaned_chunks,
     purge_stale_quarantine,
     quarantine_file,
-    should_retry,
+    record_retry,
 )
 from storage.db import get_db, init_db
 
@@ -158,6 +158,30 @@ async def _ensure_collection(client, collection_name: str) -> None:
             raise
 
 
+async def _prune_stale_points(client, collection_name: str, file_path: str, chunk_count: int) -> None:
+    """Drop points for this file that the current chunk set no longer covers.
+
+    Ingestion here is incremental (only changed chunks are re-upserted), so the
+    file's points cannot simply be deleted wholesale. Two classes go stale:
+    legacy points written under the old per-process hash() IDs, which carry no
+    chunk_index, and trailing points left behind when a file shrinks.
+    """
+    from qdrant_client.models import FieldCondition, Filter, IsEmpty, MatchValue, PayloadField, Range
+
+    same_file = FieldCondition(key="file_path", match=MatchValue(value=file_path))
+    for extra in (
+        IsEmpty(is_empty=PayloadField(key="chunk_index")),
+        FieldCondition(key="chunk_index", range=Range(gte=chunk_count)),
+    ):
+        try:
+            await client.delete(
+                collection_name=collection_name,
+                points_selector=Filter(must=[same_file, extra]),
+            )
+        except Exception as exc:
+            log.warning("Could not prune stale points for %s: %s", file_path, exc)
+
+
 async def _delete_file_from_qdrant(client, collection_name: str, file_path: str) -> None:
     from qdrant_client.models import FieldCondition, Filter, MatchValue
 
@@ -188,13 +212,21 @@ async def ingest_file(file_path: str) -> None:
         return
 
     async def handle_error(exc: Exception, error_type: ErrorType) -> None:
-        retry_count = 0
-        if should_retry(error_type, retry_count):
-            await increment_retry(file_path)
-            log.warning("Retryable error for %s (%s): %s", file_path, error_type.value, exc)
-        else:
-            await quarantine_file(file_path, error_type, str(exc))
-            log.error("Quarantined %s (%s): %s", file_path, error_type.value, exc)
+        detail = f"{type(exc).__name__}: {exc}"
+        if error_type in RETRYABLE_ERRORS:
+            attempts = await record_retry(file_path, error_type, detail)
+            if attempts <= MAX_RETRIES:
+                log.warning(
+                    "Retryable error for %s (%s, attempt %d/%d): %s",
+                    file_path, error_type.value, attempts, MAX_RETRIES, detail,
+                    exc_info=exc,
+                )
+                return
+            log.error(
+                "Giving up on %s after %d attempts (%s)", file_path, attempts - 1, error_type.value
+            )
+        await quarantine_file(file_path, error_type, detail)
+        log.error("Quarantined %s (%s): %s", file_path, error_type.value, detail, exc_info=exc)
 
     log.debug("ingest_file: start %s", file_path)
     try:
@@ -239,14 +271,15 @@ async def ingest_file(file_path: str) -> None:
         embedded = await embed_chunks(changed_chunks)
 
         log.debug("ingest_file: ensuring collection %r for %s", collection_name, file_path)
-        from mcp_servers.vectordb_server import SPARSE_VECTOR_NAME, build_sparse_vector
+        from mcp_servers.vectordb_server import SPARSE_VECTOR_NAME, build_sparse_vector, point_id
         client = AsyncQdrantClient(url=QDRANT_URL)
         try:
             await _ensure_collection(client, collection_name)
+            await _prune_stale_points(client, collection_name, file_path, len(chunks))
             log.debug("ingest_file: upserting %d point(s) to %r", len(embedded), collection_name)
             points = [
                 PointStruct(
-                    id=abs(hash((file_path, item["chunk_index"]))) % (2**63),
+                    id=point_id(file_path, item["chunk_index"]),
                     vector={
                         "": item["embedding"],
                         SPARSE_VECTOR_NAME: build_sparse_vector(item["content"]),
@@ -256,6 +289,7 @@ async def ingest_file(file_path: str) -> None:
                         "metadata": item["metadata"],
                         "chunk_type": item["chunk_type"],
                         "file_path": file_path,
+                        "chunk_index": item["chunk_index"],
                     },
                 )
                 for item in embedded
@@ -296,13 +330,7 @@ async def ingest_file(file_path: str) -> None:
         else:
             await handle_error(exc, ErrorType.CORRUPT_FILE)
     except Exception as exc:
-        if isinstance(exc, UnexpectedResponse) and exc.status_code in (503, 429, 500):
-            await handle_error(exc, ErrorType.TRANSIENT_ERROR)
-        elif isinstance(exc, (aiohttp.ClientConnectionError, aiohttp.ServerTimeoutError, TimeoutError)):
-            await handle_error(exc, ErrorType.TRANSIENT_ERROR)
-        else:
-            log.debug("ingest_file: unclassified exception for %s", file_path, exc_info=True)
-            await handle_error(exc, ErrorType.CORRUPT_FILE)
+        await handle_error(exc, classify_exception(exc))
 
 
 async def delete_file(file_path: str) -> None:
