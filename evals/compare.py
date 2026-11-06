@@ -110,6 +110,8 @@ def compare_run_files(
         "expected_fact_coverage_delta": _delta(baseline.get("expected_fact_coverage"), candidate.get("expected_fact_coverage")),
         "format_compliance_delta": _delta(baseline.get("format_compliance"), candidate.get("format_compliance")),
         "citation_presence_delta": _delta(baseline.get("citation_presence"), candidate.get("citation_presence")),
+        "expected_source_mrr_delta": _delta(baseline.get("expected_source_mrr"), candidate.get("expected_source_mrr")),
+        "expected_source_top1_delta": _delta(baseline.get("expected_source_top1"), candidate.get("expected_source_top1")),
     }
 
     sorted_swings = sorted(
@@ -125,6 +127,12 @@ def compare_run_files(
         "candidate_path": candidate_json,
         "baseline_timestamp": baseline.get("run_timestamp"),
         "candidate_timestamp": candidate.get("run_timestamp"),
+        # Taken from the runs themselves, not from --baseline-label/--candidate-label,
+        # so the report states which arm was which instead of trusting the operator.
+        "baseline_rerank": baseline.get("rerank_enabled"),
+        "candidate_rerank": candidate.get("rerank_enabled"),
+        "baseline_rerank_model": baseline.get("rerank_model"),
+        "candidate_rerank_model": candidate.get("rerank_model"),
         "case_count": len(shared_case_ids),
         "improved_count": len(improved),
         "regressed_count": len(regressed),
@@ -145,6 +153,13 @@ def build_comparison_report(comparison: dict) -> str:
             return "N/A"
         return f"{value:+.0%}"
 
+    def fmt_rerank(enabled, model) -> str:
+        if enabled is None:
+            return "unknown (run predates rerank tracking)"
+        if not enabled:
+            return "off"
+        return f"on ({model})" if model else "on"
+
     lines = [
         "# KB Agent Evaluation Comparison",
         "",
@@ -152,12 +167,18 @@ def build_comparison_report(comparison: dict) -> str:
         f"Candidate: {comparison['candidate_label']} ({comparison['candidate_timestamp']})",
         f"Cases Compared: {comparison['case_count']}",
         "",
+        "## Arms",
+        f"- Baseline rerank: {fmt_rerank(comparison.get('baseline_rerank'), comparison.get('baseline_rerank_model'))}",
+        f"- Candidate rerank: {fmt_rerank(comparison.get('candidate_rerank'), comparison.get('candidate_rerank_model'))}",
+        "",
         "## Overall Deltas",
         f"- Overall Score: {fmt_delta(comparison['metric_deltas']['overall_score_delta'])}",
         f"- Retrieval Quality: {fmt_delta(comparison['metric_deltas']['retrieval_quality_delta'])}",
         f"- Expected Fact Coverage: {fmt_delta(comparison['metric_deltas']['expected_fact_coverage_delta'])}",
         f"- Format Compliance: {fmt_delta(comparison['metric_deltas']['format_compliance_delta'])}",
         f"- Citation Presence: {fmt_delta(comparison['metric_deltas']['citation_presence_delta'])}",
+        f"- Expected Source MRR: {fmt_delta(comparison['metric_deltas']['expected_source_mrr_delta'])}",
+        f"- Expected Source Top-1: {fmt_delta(comparison['metric_deltas']['expected_source_top1_delta'])}",
         "",
         "## Status Summary",
         f"- Improved: {comparison['improved_count']}",

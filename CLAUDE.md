@@ -26,6 +26,7 @@ kb-folder-agent/
 │   ├── agent_loop.py              # run_agent() — agentic loop with tool use and live Slack reasoning posts
 │   ├── orchestrator.py            # Routes MCP calls; backend-switchable via BACKEND env var
 │   ├── rag.py                     # answer_query(), answer_query_all(), summarize_diff() → RagResult
+│   ├── reranker.py                # LLM rerank pass over retrieved chunks; leaf module, never raises
 │   └── digest.py                  # Daily digest builder + Slack poster + scheduler
 ├── evals/
 │   ├── config.py                  # REPORTS_DIR, RESULTS_DIR path constants
@@ -37,7 +38,8 @@ kb-folder-agent/
 │   ├── compare.py                 # Per-run comparison utilities
 │   ├── compare_runs.py            # Cross-run diff reporting
 │   ├── run_evals.py               # CLI entry point
-│   └── test_cases.yaml            # Benchmark test cases
+│   ├── test_cases.yaml            # Benchmark test cases
+│   └── test_cases_rerank.yaml     # Separate harder pack with real rerank headroom
 ├── integrations/
 │   └── notion.py                  # create_ticket() — Notion Tasks Tracker via REST API
 ├── api/
@@ -58,6 +60,8 @@ kb-folder-agent/
 ├── run_api.py                     # uvicorn entry point: python run_api.py (port 8000)
 ├── slack/
 │   └── bot.py                     # /kb slash command handler
+├── tests/
+│   └── test_reranker.py           # Offline, dependency-free (no pytest): python tests/test_reranker.py
 └── storage/
     ├── db.py                      # init_db(), get_db() — aiosqlite async context manager
     └── metadata.db                # Created at runtime — never commit
@@ -68,7 +72,13 @@ kb-folder-agent/
 pip install -r requirements.txt
 python main.py                           # Start watcher + Slack bot
 python main.py connect ~/path/to/folder  # Write WATCHED_FOLDER to .env
+python tests/test_reranker.py            # Offline reranker checks — no network, no API spend
+python -m evals.run_evals --no-rerank --cases-path evals/test_cases_rerank.yaml   # A/B arm A
+python -m evals.run_evals --rerank    --cases-path evals/test_cases_rerank.yaml   # A/B arm B
 ```
+
+> On this machine bare `python` resolves to another project venv. Use
+> `.\.venv\Scripts\python.exe`.
 
 ## Environment Variables
 
@@ -91,6 +101,12 @@ AZURE_TENANT_ID         # consumers (personal) or tenant ID
 AZURE_CLIENT_SECRET     # App secret (if using confidential client)
 ONEDRIVE_FOLDER         # Root folder name in OneDrive (e.g. test-kb)
 ONEDRIVE_POLL_INTERVAL  # Seconds between OneDrive polls (default: 60)
+RERANK_ENABLED          # true to enable the LLM reranker (default: disabled)
+RERANK_MODEL            # Reranker model (default: claude-haiku-5-5)
+RERANK_CANDIDATE_MULTIPLIER  # Fetch top_k * this before reranking (default: 3)
+RERANK_MAX_CANDIDATES   # Hard cap on the candidate pool (default: 40)
+RERANK_CHUNK_CHARS      # Chars of each chunk shown to the reranker (default: 700)
+RERANK_TIMEOUT_SECONDS  # Per-call rerank timeout before falling back (default: 8)
 NOTION_API_KEY          # Notion integration API key (optional)
 NOTION_DATABASE_ID      # Notion Tasks Tracker database ID (optional)
 ```
@@ -148,7 +164,7 @@ All timestamps: ISO 8601 UTC.
 | `/kb clear-quarantine <folder> <filename>` | Remove file from quarantine |
 | `/kb clear-quarantine-all` | Clear every quarantine entry |
 | `/kb agent <question>` | Multi-step agentic query with live tool-use reasoning posted to channel |
-| `/kb eval [all\|case <id>\|task-type <type>\|collection <folder>] [judge]` | Run evaluation suite against KB benchmark |
+| `/kb eval [all\|case <id>\|task-type <type>\|collection <folder>] [judge] [rerank\|no-rerank]` | Run evaluation suite against KB benchmark |
 | `/kb eval-report` | Show the latest saved evaluation summary |
 | `/kb ticket "<task name>" [high\|medium\|low] [YYYY-MM-DD]` | Create a Notion ticket in the Tasks Tracker database |
 
@@ -185,8 +201,8 @@ All timestamps: ISO 8601 UTC.
 
 ## V4 Phases
 
-**V4-1** ✔ Hybrid search — dense vector + BM25-style sparse vectors via Qdrant native API.
-- `mcp_servers/vectordb_server.py`: `build_sparse_vector(text)` tokenises with regex, hashes tokens to 24-bit indices, weights by `1+log(tf)`; `SPARSE_VECTOR_NAME = "text-sparse"`; `_ensure_collection` provisions sparse config on create and calls `update_collection` on existing 409; `query_collection` accepts optional `query_text`, runs `Prefetch` (dense + sparse) with `Fusion.RRF`, falls back to dense-only on any error.
+**V4-1** ✔ Hybrid search — dense vector + BM25-style sparse vectors stored in Qdrant, **fused client-side in Python**.
+- `mcp_servers/vectordb_server.py`: `build_sparse_vector(text)` tokenises with regex, hashes tokens to 24-bit indices, weights by `1+log(tf)`; `SPARSE_VECTOR_NAME = "text-sparse"`; `_ensure_collection` provisions sparse config on create and calls `update_collection` on existing 409. `query_collection` accepts optional `query_text` and, when the sparse vector is non-empty, issues **two separate** `query_points` calls — dense (`using=""`) and sparse (`using=SPARSE_VECTOR_NAME`), each at `limit=top_k * 2` — then merges the two ranked lists with `_rrf_merge()`, a plain-Python Reciprocal Rank Fusion at `k=60`. This is **not** Qdrant's server-side `Prefetch`/`Fusion.RRF`; there is no `Prefetch` anywhere in the codebase. Any exception in the hybrid path logs a warning and falls back to a single dense-only query.
 - `agent/orchestrator.py`: `search()` threads `query_text=query` into `query_collection` (public API unchanged).
 - Both watchers: `_ensure_collection` updated to match; `PointStruct.vector` changed to dict `{"": dense, "text-sparse": sparse}` so each point carries both vectors at index time.
 - Existing collections: startup `update_collection` adds sparse config; points re-indexed with sparse vectors on next ingest cycle. Dense-only fallback ensures zero downtime during migration.
@@ -211,6 +227,23 @@ All timestamps: ISO 8601 UTC.
 **V7-1** ✔ FastAPI REST + SSE layer — `api/` package exposes the existing agent functions as HTTP endpoints. `GET /collections` and `GET /collections/{name}/info` serve collection metadata. `POST /query/ask` handles single-collection and fan-out RAG. `POST /query/agent` streams the agentic loop via SSE using an `asyncio.Queue` bridge between `run_agent()`'s `post_step` callback and the `StreamingResponse` generator. `POST /query/score|gaps|draft|compare` parse Claude's structured output into typed JSON. All endpoints are async, wrap errors as `JSONResponse(500)`. Entry point: `python run_api.py` (uvicorn, port 8000). No changes to Slack bot or agent layer. Added `fastapi` and `uvicorn[standard]` to `requirements.txt`.
 
 **V7-2** ✔ Next.js web UI — `web/` Next.js 15 App Router project (TypeScript, Tailwind v4). Dark sidebar layout (`gray-950` bg, `gray-900` sidebar, violet-500 accent). `CollectionSidebar` fetches from API with skeleton loader and refresh button. Six tab components: **Ask** (chat history, source pill badges), **Agent** (streaming SSE with step-by-step reasoning chain, abort/stop control, pulsing indicator), **Score** (color-coded 1–10 score, strengths/weaknesses grid), **Gaps** (hard/soft gap badges, priority recommendation), **Draft** (document card with inline `[EVIDENCE MISSING]` red highlighting, copy-to-clipboard), **Compare** (two-collection selector, parsed markdown table as real HTML table, complementary/divergences sections, bottom line callout). All tabs show SVG empty states. No external component libraries — all Tailwind. `src/lib/api.ts` is the typed fetch wrapper; SSE handled inline in `AgentTab` via `fetch` + `ReadableStream`.
+
+## V8 Phases
+
+**V8-1** ✔ LLM reranker — an optional second-stage rerank over the hybrid candidate pool, off by default (`RERANK_ENABLED`).
+- `agent/reranker.py` is a **leaf module**: it imports nothing from `agent/`, because `agent/rag.py` imports `orchestrator`, so putting the reranker in orchestrator would be a cycle — and orchestrator must stay importable without `ANTHROPIC_API_KEY` (the watcher path and `evals/runner.py` both import it). The `anthropic` client is a **lazy singleton**, never built at import.
+- Model is `claude-haiku-5-5` via `RERANK_MODEL`, called with `output_config={"effort": "low"}` and `thinking={"type": "disabled"}`. **No `temperature`** (non-default sampling params return 400 on current models) and **no `budget_tokens`** (400 on Haiku 5.5). At $0.10/$0.50 per MTok a 40-candidate rerank is ~$0.001.
+- The model returns **ordered candidate numbers, not scores** — a permutation is trivially validatable, where per-candidate scores would invite a threshold cut that could silently shrink the result list.
+- `_parse_order()` is the load-bearing invariant: collect every integer, keep 1..n, dedupe preserving first occurrence, return `None` if nothing usable survives, then **append every omitted index in original retrieval order**. That last step guarantees `len(rerank(...)) == min(top_k, len(hits))`, which is what stops a truncated or chatty response from dropping a result list below `find_gaps()`'s `if len(results) < 5` gate.
+- `rerank()` **never raises into a Slack handler**: `asyncio.wait_for` + bare `except Exception` → `log.warning` → `return hits[:top_k]`, mirroring the dense-only fallback in `query_collection`. Short-circuits with no API call when `len(hits) <= 1`.
+- `orchestrator.search()` gained a **keyword-only** `rerank: bool = True`. When enabled it over-fetches `min(top_k * RERANK_CANDIDATE_MULTIPLIER, RERANK_MAX_CANDIDATES)` candidates, reranks, then truncates to `top_k`. With `RERANK_ENABLED` unset, `fetch_k == top_k` and the slice is a no-op, so the off-path is unchanged — that is what makes the A/B baseline arm trustworthy. Keyword-only means all 7 `search()` call sites in `agent/rag.py` (and therefore every `/kb` command and every `api/` endpoint) picked this up with **zero edits to `rag.py`**.
+- `search_all_collections()` reranks **per collection**, in parallel via `asyncio.gather`, not over a merged pool — its return type is keyed by collection and `answer_query_all()` builds `sources_by_collection` from it. Cross-collection budget reallocation is a separate experiment.
+- **`infer_collection()` deliberately bypasses `search()`** and calls `query_collection(top_k=1)` with no `query_text`: it compares raw scores *across* collections against `INFERENCE_CONFIDENCE_THRESHOLD`, which reranking would destroy, at a cost of one LLM call per collection per routing hop. The bypass is load-bearing — do not tidy it into `search()`.
+- `agent/agent_loop.py` opts out explicitly (`rerank=False` at both orchestrator call sites): the agent already runs several retrieval rounds, and reranking each would multiply latency. Default `True` + 2 opt-outs beats default `False` + 7 opt-ins, because a missed opt-in fails silently.
+- **Measurement.** `check_expected_source_rank()` in `evals/metrics.py` adds MRR and top-1 over the *ordered* source list. Both are **report-only, weight 0** — deliberately absent from `OVERALL_SCORE_WEIGHTS`, because adding a weight would renormalise every historical `overall_score` and re-run `assign_status()`, conflating "a metric was added" with "retrieval improved". `check_expected_sources()` is an order-insensitive set hit rate, so on a 42-chunk KB where `score`/`draft`/`gaps` already retrieve whole collections it cannot see a reranker at all; MRR is the metric that can.
+- `evals/test_cases_rerank.yaml` is a **separate 3-case pack** with queries whose lexical bait pulls the wrong chunks up and whose `top_k` sits below the collection chunk count. Kept out of `test_cases.yaml` so the archived 8-case baseline stays directly comparable. Run the rerank-OFF arm first: if it already scores 100%, the cases are too easy.
+- `EvalRunConfig.rerank` is **tri-state** (`None` = honour the env, `True`/`False` = force). `run_evaluations()` forces `RERANK_ENABLED`, reads the *effective* value back for the report, and **restores the previous value in a `finally`** — without that, a Slack-triggered `/kb eval rerank` would leave the live bot reranking for the rest of its uptime. `evals/compare.py` reports each arm's rerank state from the run files themselves rather than trusting `--baseline-label`.
+- `tests/test_reranker.py` covers all of the above offline — no network, no Qdrant, no API spend, and no pytest dependency. Run it with `.\.venv\Scripts\python.exe tests	est_reranker.py`.
 
 ## Known Fixes
 
@@ -237,3 +270,9 @@ All timestamps: ISO 8601 UTC.
 **OneDrive backend wrote no version snapshots** — Snapshots were written only by `ingestion/watcher.py`, so under `BACKEND=onedrive` the `file_versions` table stayed empty and `summarize_diff()` always returned "Not enough version history to compare." `ingestion/onedrive_watcher.py` gained `get_latest_version_hash()`, `store_version_snapshot()` and `_extract_text_for_snapshot(local_path, original_name)` (the download lands in a temp file, so extraction keys off the OneDrive filename for its extension), snapshotting after the hash-change check and before chunking while the temp file still exists. Guarded by `try/except` + `log.warning` so a snapshot failure can never quarantine the file.
 
 **A cold Qdrant at startup killed the Slack bot** — `start_watcher()` / `start_onedrive_watcher()` called `purge_orphaned_qdrant_points()` and `purge_chunks_for_missing_collections()` unguarded, and `main.py` gathers those coroutines with `start_bot()`. With Qdrant stopped, `ResponseHandlingException: All connection attempts failed` propagated out of `asyncio.gather` and took the whole process down seconds after "Bolt app is running!". Both watchers now wrap just those two Qdrant purges, log a warning and continue with zero counts; files that fail to ingest while Qdrant is cold are retried as `TRANSIENT_ERROR`.
+
+**Dead `add_documents` tool reintroduced the salted point-ID bug** — `mcp_servers/vectordb_server.py` carried a second, older ID helper `_point_id()` (`abs(hash((file_path, chunk_index))) % 2**63`) alongside the fixed `point_id()`. Its only caller was the `add_documents` MCP tool, which also passed `vector=doc["embedding"]` — a bare dense list that no longer matches the named-vector schema (`{"": dense, "text-sparse": sparse}`) the watchers write. Nothing in the project called `add_documents`: both watchers upsert directly via `AsyncQdrantClient`. Both the tool and `_point_id()` are deleted, along with the now-unused `PointStruct` import. Writes to Qdrant happen only in the two watchers; `point_id()` in `vectordb_server.py` is the single ID function. `_ensure_collection()` in that module is now also uncalled (the watchers have their own copies) but is kept as the reference implementation.
+
+## Documentation Map
+
+`CLAUDE.md` (this file) is the **single source of truth** for project instructions. `AGENTS.md` is a pointer to it — do not let it grow its own copy of the stack, structure, commands or rules. `CODEX.md` is a chronological handoff log for the Evaluation Center workstream, not an instruction file; append to it, don't mirror this file into it. `FEATURES.md` is the user-facing `/kb` command guide. `README.md` is setup documentation and is **UTF-16LE with no BOM** — patch it with an explicit encoding or not at all.

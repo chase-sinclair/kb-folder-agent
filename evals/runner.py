@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import os
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 
 import yaml
 
+from agent import reranker
 from agent.orchestrator import collection_exists, folder_to_collection_name
 from agent.rag import (
     answer_query_all_eval,
@@ -256,6 +258,8 @@ def build_summary(
     case_results: list[EvalCaseResult],
     *,
     use_judge: bool,
+    rerank_enabled: bool,
+    rerank_model: str | None,
     output_markdown: str,
     output_json: str,
 ) -> EvalRunSummary:
@@ -287,12 +291,16 @@ def build_summary(
     return EvalRunSummary(
         run_timestamp=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
         judge_enabled=use_judge,
+        rerank_enabled=rerank_enabled,
+        rerank_model=rerank_model,
         total_cases=len(case_results),
         passed=passed,
         warnings=warnings_count,
         failed=failed,
         overall_score=_average([case.overall_score for case in case_results]),
         retrieval_quality=_average([case.deterministic_scores.expected_source_hit_rate for case in case_results]),
+        expected_source_mrr=_average([case.deterministic_scores.expected_source_mrr for case in case_results]),
+        expected_source_top1=_average([case.deterministic_scores.expected_source_top1 for case in case_results]),
         expected_fact_coverage=_average([case.deterministic_scores.expected_fact_coverage for case in case_results]),
         format_compliance=_average(
             [
@@ -314,13 +322,40 @@ def build_summary(
 
 
 async def run_evaluations(config: EvalRunConfig) -> EvalRunSummary:
-    cases = filter_cases(load_test_cases(config.cases_path), config)
-    case_results = []
-    for case in cases:
-        case_results.append(await run_case(case, config.use_judge))
-    return build_summary(
-        case_results,
-        use_judge=config.use_judge,
-        output_markdown=config.output_markdown or "",
-        output_json=config.output_json or "",
-    )
+    """Run the configured cases and summarise them.
+
+    When config.rerank is not None it forces RERANK_ENABLED for the duration of
+    the run and restores the previous value in a finally. The restore is not
+    optional: without it a Slack-triggered `/kb eval rerank` would leave the
+    live bot reranking for the rest of its uptime. Forcing the env var beats
+    threading a parameter, which would mean editing all seven *_eval wrappers
+    plus all seven rag functions for no behavioural gain.
+    """
+    forced = config.rerank is not None
+    previous = os.environ.get("RERANK_ENABLED")
+    try:
+        if forced:
+            os.environ["RERANK_ENABLED"] = "true" if config.rerank else "false"
+        # Read the EFFECTIVE value back, so the report records what actually ran
+        # rather than what was requested.
+        rerank_on = reranker.rerank_enabled()
+        rerank_model = reranker.model_name() if rerank_on else None
+
+        cases = filter_cases(load_test_cases(config.cases_path), config)
+        case_results = []
+        for case in cases:
+            case_results.append(await run_case(case, config.use_judge))
+        return build_summary(
+            case_results,
+            use_judge=config.use_judge,
+            rerank_enabled=rerank_on,
+            rerank_model=rerank_model,
+            output_markdown=config.output_markdown or "",
+            output_json=config.output_json or "",
+        )
+    finally:
+        if forced:
+            if previous is None:
+                os.environ.pop("RERANK_ENABLED", None)
+            else:
+                os.environ["RERANK_ENABLED"] = previous

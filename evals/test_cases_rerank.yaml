@@ -1,0 +1,109 @@
+# Rerank benchmark pack — kept separate from test_cases.yaml on purpose.
+#
+# The main 8-case pack cannot measure a reranker. score (top_k=15), draft (20),
+# gaps (20) and compare (10) already retrieve entire collections on a 42-chunk
+# KB, so a reranker can only change order there, and retrieval_quality is an
+# order-insensitive set hit rate that is already at 100%. Keeping these cases in
+# their own file also keeps the archived 8-case baseline directly comparable.
+#
+# Selection criteria for every case here:
+#   1. top_k is BELOW the collection's chunk count, so membership can actually
+#      change (only question_answering at 5 and question_answering_all at 3
+#      qualify today).
+#   2. The expected file is a minority of the collection's chunks.
+#   3. The query carries lexical bait, so the BM25 leg of the hybrid search
+#      actively pulls the wrong chunks up and there is something to fix.
+#
+# Run the rerank-OFF arm FIRST. If it already scores 100% here, these cases are
+# too easy: tighten the distractor wording and re-baseline before ever running
+# the rerank-ON arm. A defensible number needs a baseline that fails.
+
+test_cases:
+  - id: qa_resume_de_001
+    name: Data engineer resume under PM-vocabulary distraction
+    task_type: question_answering
+    collection: Resumes
+    query: For a DHS cyber transformation effort needing program management, an active clearance, FedRAMP and zero-trust exposure, which candidate actually built the 4.2TB ML fraud-detection data pipeline?
+    expected_sources:
+      - James_Okafor_DataEngineer.md
+    expected_facts:
+      - James Okafor
+      - 4.2TB
+    required_sections: []
+    unacceptable_claims:
+      - Sarah Chen built the 4.2TB
+      - both candidates built the pipeline
+    notes: >
+      Resumes holds 10 chunks, 5 per candidate, and top_k is 5 — so the two
+      resumes compete for every slot. Deliberately the inverse of
+      resume_pm_001: almost all the query vocabulary matches Sarah Chen's PM
+      resume and only the 4.2TB pipeline clause points at James Okafor. The
+      sparse leg should pull Sarah's chunks up; reranking has to push past them.
+
+  - id: qa_contract_ceiling_001
+    name: IDIQ terms under NDA-boilerplate distraction (regression guard)
+    task_type: question_answering
+    collection: Contracts
+    query: When we share personnel rates and pricing models with a teaming partner under our standard mutual confidentiality obligations, what are the actual labor rate figures and total dollar limits on our existing government-wide contract vehicle that such a disclosure would expose?
+    expected_sources:
+      - IDIQ_GovCloud_Services_2023.md
+    expected_facts: []
+    required_sections: []
+    unacceptable_claims:
+      - unlimited ceiling
+      - guaranteed award
+    notes: >
+      Contracts holds 8 chunks: 5 of NDA_Template_Standard.md and 3 of
+      IDIQ_GovCloud_Services_2023.md. top_k is 5, so the NDA chunks can take
+      every slot on their own.
+
+      ROLE: REGRESSION GUARD, not a headroom case. Measured 2026-11-05.
+
+      This case was built to fail and does not. The first rerank-OFF arm
+      scored it MRR 1.00, so the query was rewritten to drop every
+      IDIQ-only phrase ("ceiling value", "ordering period", "GovCloud
+      services IDIQ") and rebuilt from the NDA's own distinctive vocabulary
+      (personnel rates, pricing models, teaming partner, mutual
+      confidentiality obligations, disclosure), pointing at the IDIQ
+      semantically rather than lexically. The second OFF arm scored it MRR
+      1.00 again - an IDIQ chunk at rank 1 by 0.5448 to 0.5428 over the top
+      NDA chunk, and the surfaced chunk ("Key Contract Terms": minimum order
+      $2,500, maximum single task order $15,000,000, labor rates) is exactly
+      what the query asks for.
+
+      The cause is structural, not lexical: Contracts holds 8 chunks across
+      two topically distinct files and top_k is 5, so 5 of 8 chunks come
+      back and both files appear almost unconditionally. Any query where the
+      IDIQ is the correct answer is also a query where it is semantically
+      findable, because there are only two topics to discriminate between.
+      Further rewriting would be fitting noise at 0.002 score margins; the
+      fix is more documents, not better wording.
+
+      Its job in this pack is therefore to prove the reranker does not BREAK
+      an already-correct ranking. A drop below MRR 1.00 here in the rerank-ON
+      arm is a real regression and must not be dismissed as noise.
+
+      expected_facts stays empty: this case measures retrieval, and an
+      expected fact would fold generation noise into a retrieval experiment.
+
+  - id: qa_all_pricing_001
+    name: Fan-out price position and technical differentiator
+    task_type: question_answering_all
+    query: What is our price position and our technical differentiator for the SOC modernization bid — the win price target and labor mix, and the threat-detection approach we are proposing?
+    expected_sources:
+      - PricingStrategy_Notes.md
+      - TechnicalApproach_CyberSOC.md
+    expected_facts:
+      - HQ-2024-SOC-0041
+      - Splunk
+    required_sections: []
+    unacceptable_claims:
+      - final award value
+      - we won the solicitation
+    notes: >
+      Fan-out runs top_k_per_collection=3, the one place the per-collection
+      budget genuinely binds. CostVolume has a single file, so that half is a
+      freebie; the discriminating half is TechnicalVolume, where
+      TechnicalApproach_CyberSOC.md has to beat DataModernization_WhitePaper.md
+      for 3 of 10 chunks. Note that answer_query_all_eval() flattens sources
+      collection-major, so read MRR here as directional only.

@@ -11,6 +11,12 @@ def write_json_report(summary: EvalRunSummary, output_path: str) -> None:
     path.write_text(json.dumps(asdict(summary), indent=2), encoding="utf-8")
 
 
+def _rerank_label(summary: EvalRunSummary) -> str:
+    if not summary.rerank_enabled:
+        return "off"
+    return f"on ({summary.rerank_model})" if summary.rerank_model else "on"
+
+
 def build_markdown_report(summary: EvalRunSummary) -> str:
     judge_case_scores = [
         case.judge_scores for case in summary.case_results if case.judge_scores
@@ -43,12 +49,19 @@ def build_markdown_report(summary: EvalRunSummary) -> str:
         f"- Format Compliance: {summary.format_compliance:.0%}",
         f"- Citation Presence: {summary.citation_presence:.0%}",
         f"- Hallucination Risk: {summary.hallucination_risk}",
+        f"- Expected Source MRR: {summary.expected_source_mrr:.0%} (report-only)",
+        f"- Expected Source Top-1: {summary.expected_source_top1:.0%} (report-only)",
+        f"- Rerank: {_rerank_label(summary)}",
         "",
         "## Scores by Task Type",
     ]
 
     if summary.judge_enabled:
-        lines[14:14] = [
+        # Anchor on the section header rather than a magic index: the Overall
+        # Scores block has grown before and a hardcoded offset silently landed
+        # the judge lines in the wrong place.
+        insert_at = lines.index("## Scores by Task Type") - 1
+        lines[insert_at:insert_at] = [
             f"- Judge Groundedness: {judge_avg('groundedness_score')}",
             f"- Judge Completeness: {judge_avg('completeness_score')}",
             f"- Judge Citation Accuracy: {judge_avg('citation_accuracy_score')}",

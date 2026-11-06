@@ -27,11 +27,16 @@ class EvalRunConfig:
     output_markdown: str | None = None
     output_json: str | None = None
     use_judge: bool = False
+    # Tri-state: None = honour RERANK_ENABLED from the environment,
+    # True/False = force it for the duration of this run.
+    rerank: bool | None = None
 
 
 @dataclass
 class DeterministicScores:
     expected_source_hit_rate: float | None = None
+    expected_source_mrr: float | None = None
+    expected_source_top1: float | None = None
     expected_fact_coverage: float | None = None
     required_section_compliance: float | None = None
     missing_evidence_flag_compliance: float | None = None
@@ -85,12 +90,16 @@ class EvalCaseResult:
 class EvalRunSummary:
     run_timestamp: str
     judge_enabled: bool
+    rerank_enabled: bool
+    rerank_model: str | None
     total_cases: int
     passed: int
     warnings: int
     failed: int
     overall_score: float
     retrieval_quality: float
+    expected_source_mrr: float
+    expected_source_top1: float
     expected_fact_coverage: float
     format_compliance: float
     citation_presence: float

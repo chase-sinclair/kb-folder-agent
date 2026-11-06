@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+from agent import reranker
 from ingestion.embedder import embed_query
 from mcp_servers.vectordb_server import (
     delete_document_chunks,
@@ -25,6 +26,29 @@ else:
 log = logging.getLogger(__name__)
 
 INFERENCE_CONFIDENCE_THRESHOLD = 0.35
+
+
+def _int_env(name: str, default: int) -> int:
+    raw = os.environ.get(name, "").strip()
+    if not raw:
+        return default
+    try:
+        value = int(raw)
+    except ValueError:
+        log.warning("Invalid %s %r — using %d", name, raw, default)
+        return default
+    return value if value > 0 else default
+
+
+# How deep to fetch before reranking. The reranker only reorders, so a wider
+# candidate pool is the only way it can change which chunks reach the prompt.
+RERANK_CANDIDATE_MULTIPLIER = _int_env("RERANK_CANDIDATE_MULTIPLIER", 3)
+RERANK_MAX_CANDIDATES = _int_env("RERANK_MAX_CANDIDATES", 40)
+
+
+
+def _candidate_k(top_k: int) -> int:
+    return max(top_k, min(top_k * RERANK_CANDIDATE_MULTIPLIER, RERANK_MAX_CANDIDATES))
 
 
 async def get_available_collections() -> list[dict]:
@@ -46,15 +70,29 @@ async def get_folder_list() -> list[dict]:
         raise
 
 
-async def search(collection_name: str, query: str, top_k: int = 5) -> list[dict]:
+async def search(collection_name: str, query: str, top_k: int = 5, *, rerank: bool = True) -> list[dict]:
+    """Hybrid search, optionally rerank-refined.
+
+    `rerank` is keyword-only so no positional caller can break, and defaults to
+    True so every rag.py entry point picks it up without an edit there. The
+    agent loop opts out explicitly (see agent/agent_loop.py).
+
+    With RERANK_ENABLED unset, fetch_k == top_k and the slice is a no-op, so
+    this path is identical to the pre-reranker behaviour.
+    """
     try:
+        use_rerank = rerank and reranker.rerank_enabled()
+        fetch_k = _candidate_k(top_k) if use_rerank else top_k
         vector = await embed_query(query)
-        return await query_collection(
+        hits = await query_collection(
             collection_name=collection_name,
             query_vector=vector,
-            top_k=top_k,
+            top_k=fetch_k,
             query_text=query,
         )
+        if not use_rerank or len(hits) <= 1:
+            return hits[:top_k]
+        return await reranker.rerank(query, hits, top_k)
     except Exception as exc:
         log.error("search failed for collection %r, query %r: %s", collection_name, query, exc)
         raise
@@ -81,9 +119,9 @@ async def get_collection_info(collection_name: str) -> dict:
     return await _vdb_get_collection_info(collection_name)
 
 
-async def search_all(query: str) -> list[dict]:
+async def search_all(query: str, *, rerank: bool = True) -> list[dict]:
     """Flattened fan-out search across all collections. Each hit includes a collection_name key."""
-    per_collection = await search_all_collections(query)
+    per_collection = await search_all_collections(query, rerank=rerank)
     flat: list[dict] = []
     for col_name, hits in per_collection.items():
         for hit in hits:
@@ -91,10 +129,17 @@ async def search_all(query: str) -> list[dict]:
     return flat
 
 
-async def search_all_collections(query: str, top_k_per_collection: int = 3) -> dict[str, list[dict]]:
+async def search_all_collections(
+    query: str,
+    top_k_per_collection: int = 3,
+    *,
+    rerank: bool = True,
+) -> dict[str, list[dict]]:
     collections = await get_available_collections()
     if not collections:
         return {}
+    use_rerank = rerank and reranker.rerank_enabled()
+    fetch_k = _candidate_k(top_k_per_collection) if use_rerank else top_k_per_collection
     vector = await embed_query(query)
     results = {}
     for col in collections:
@@ -103,7 +148,7 @@ async def search_all_collections(query: str, top_k_per_collection: int = 3) -> d
             hits = await query_collection(
                 collection_name=name,
                 query_vector=vector,
-                top_k=top_k_per_collection,
+                top_k=fetch_k,
                 query_text=query,
             )
             if hits:
@@ -111,7 +156,18 @@ async def search_all_collections(query: str, top_k_per_collection: int = 3) -> d
                 log.info("search_all_collections: %d results from %r", len(hits), name)
         except Exception as exc:
             log.warning("search_all_collections: skipping %r due to error: %s", name, exc)
-    return results
+
+    if not use_rerank or not results:
+        return {name: hits[:top_k_per_collection] for name, hits in results.items()}
+
+    # Rerank per collection, not over a merged pool: the return type is keyed by
+    # collection and answer_query_all() builds sources_by_collection from it.
+    # Cross-collection budget reallocation is a separate, larger experiment.
+    names = list(results)
+    reranked = await asyncio.gather(
+        *(reranker.rerank(query, results[name], top_k_per_collection) for name in names)
+    )
+    return dict(zip(names, reranked))
 
 
 async def infer_collection(query: str) -> dict:
@@ -129,6 +185,11 @@ async def infer_collection(query: str) -> dict:
     for col in collections:
         name = col["name"]
         try:
+            # Deliberately bypasses search(): this compares raw scores ACROSS
+            # collections against INFERENCE_CONFIDENCE_THRESHOLD. Reranking would
+            # destroy that comparability (each call reorders within one
+            # collection only) and cost one LLM call per collection per routing
+            # hop. Do not "tidy" this into search().
             hits = await query_collection(collection_name=name, query_vector=vector, top_k=1)
             if hits:
                 score = hits[0].get("score", 0.0)

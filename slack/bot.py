@@ -121,12 +121,18 @@ def _find_latest_eval_results() -> Path | None:
 def _parse_eval_request(text: str) -> tuple[EvalRunConfig | None, str | None]:
     request = (text or "").strip()
     use_judge = False
+    rerank: bool | None = None
     tokens = [token for token in request.split() if token]
 
     normalized_tokens: list[str] = []
     for token in tokens:
-        if token.lower() == "judge":
+        lowered = token.lower()
+        if lowered == "judge":
             use_judge = True
+        elif lowered == "rerank":
+            rerank = True
+        elif lowered in {"no-rerank", "norerank"}:
+            rerank = False
         else:
             normalized_tokens.append(token)
 
@@ -136,6 +142,7 @@ def _parse_eval_request(text: str) -> tuple[EvalRunConfig | None, str | None]:
         output_markdown=str(REPORTS_DIR / f"eval_report_{output_slug}.md"),
         output_json=str(RESULTS_DIR / f"eval_results_{output_slug}.json"),
         use_judge=use_judge,
+        rerank=rerank,
     )
 
     if not normalized_tokens or normalized_tokens[0].lower() == "all":
@@ -154,10 +161,22 @@ def _parse_eval_request(text: str) -> tuple[EvalRunConfig | None, str | None]:
         return config, None
 
     usage = (
-        "Usage: `/kb eval [all] [judge]`, `/kb eval case <id> [judge]`, "
-        "`/kb eval task-type <type> [judge]`, or `/kb eval collection <FolderName> [judge]`"
+        "Usage: `/kb eval [all] [judge] [rerank|no-rerank]`, `/kb eval case <id> [judge]`, "
+        "`/kb eval task-type <type> [judge]`, or `/kb eval collection <FolderName> [judge]`. "
+        "`rerank` / `no-rerank` force the LLM reranker on or off for that run only."
     )
     return None, usage
+
+
+def _rerank_label(summary_data: dict) -> str:
+    """Tolerates reports written before rerank tracking existed (key absent)."""
+    enabled = summary_data.get("rerank_enabled")
+    if enabled is None:
+        return "unknown"
+    if not enabled:
+        return "off"
+    model = summary_data.get("rerank_model")
+    return f"on ({model})" if model else "on"
 
 
 def _build_eval_summary_blocks(summary, header_text: str, *, latest: bool = False) -> list[dict]:
@@ -182,6 +201,8 @@ def _build_eval_summary_blocks(summary, header_text: str, *, latest: bool = Fals
             "format_compliance": summary.format_compliance,
             "citation_presence": summary.citation_presence,
             "judge_enabled": summary.judge_enabled,
+            "rerank_enabled": summary.rerank_enabled,
+            "rerank_model": summary.rerank_model,
             "hallucination_risk": summary.hallucination_risk,
             "recommendations": summary.recommendations,
             "output_markdown": summary.output_markdown,
@@ -210,6 +231,7 @@ def _build_eval_summary_blocks(summary, header_text: str, *, latest: bool = Fals
         ),
         _context(
             f"Judge enabled: {'yes' if summary_data['judge_enabled'] else 'no'}"
+            + f" | Rerank: {_rerank_label(summary_data)}"
             + (f" | Hallucination risk: {summary_data['hallucination_risk']}" if summary_data.get("hallucination_risk") else "")
         ),
     ]
@@ -274,7 +296,8 @@ async def _handle_eval(request: str, client, channel_id: str, user_id: str) -> t
             _section("Starting evaluation run in the background. I’ll post a summary here when it completes."),
             _context(
                 f"Scope: case={config.case_id or 'all'} | task-type={config.task_type or 'all'} | "
-                f"collection={config.collection or 'all'} | judge={'on' if config.use_judge else 'off'}"
+                f"collection={config.collection or 'all'} | judge={'on' if config.use_judge else 'off'} | "
+                f"rerank={'env default' if config.rerank is None else ('on' if config.rerank else 'off')}"
             ),
         ],
     )

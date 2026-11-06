@@ -73,7 +73,9 @@ async def _execute_tool(name: str, inputs: dict, orchestrator) -> str:
             return "\n".join(lines)
 
         elif name == "query_collection":
-            hits = await orchestrator.search(inputs["collection"], inputs["query"])
+            # rerank=False: the agent already reasons over several rounds of
+            # retrieval, and reranking every round would multiply latency.
+            hits = await orchestrator.search(inputs["collection"], inputs["query"], rerank=False)
             if not hits:
                 return "No results found."
             lines = [
@@ -83,7 +85,7 @@ async def _execute_tool(name: str, inputs: dict, orchestrator) -> str:
             return "\n\n".join(lines)
 
         elif name == "search_all_collections":
-            hits = await orchestrator.search_all(inputs["query"])
+            hits = await orchestrator.search_all(inputs["query"], rerank=False)
             if not hits:
                 return "No results found across any collection."
             lines = [

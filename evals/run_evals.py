@@ -21,6 +21,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output", dest="output_markdown", help="Markdown report output path.")
     parser.add_argument("--results-json", dest="output_json", help="JSON report output path.")
     parser.add_argument("--use-judge", action="store_true", help="Enable LLM-as-judge scoring.")
+    rerank_group = parser.add_mutually_exclusive_group()
+    rerank_group.add_argument(
+        "--rerank", dest="rerank", action="store_true", default=None,
+        help="Force the LLM reranker ON for this run, whatever RERANK_ENABLED says.",
+    )
+    rerank_group.add_argument(
+        "--no-rerank", dest="rerank", action="store_false",
+        help="Force the LLM reranker OFF for this run (use this for the A/B baseline arm).",
+    )
     return parser.parse_args()
 
 
@@ -38,6 +47,7 @@ async def main() -> None:
         output_markdown=output_markdown,
         output_json=output_json,
         use_judge=args.use_judge,
+        rerank=args.rerank,
     )
     summary = await run_evaluations(config)
     summary.output_markdown = output_markdown
@@ -49,6 +59,13 @@ async def main() -> None:
     print(f"Completed {summary.total_cases} case(s)")
     print(f"PASS: {summary.passed}  WARN: {summary.warnings}  FAIL: {summary.failed}")
     print(f"Overall score: {summary.overall_score:.0%}")
+    print(f"Expected source MRR: {summary.expected_source_mrr:.0%} (report-only)")
+    # Print the EFFECTIVE value, not the flag, so two terminals running the two
+    # arms cannot be confused for one another.
+    rerank_label = "off"
+    if summary.rerank_enabled:
+        rerank_label = f"on ({summary.rerank_model})" if summary.rerank_model else "on"
+    print(f"Rerank: {rerank_label}")
     print(f"Markdown report: {output_markdown}")
     print(f"JSON results: {output_json}")
 

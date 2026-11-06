@@ -46,6 +46,43 @@ def check_expected_sources(retrieved_sources: list[str], expected_sources: list[
     return _score(matched, expected_sources), matched, missing
 
 
+def check_expected_source_rank(
+    retrieved_sources: list[str],
+    expected_sources: list[str],
+) -> tuple[float | None, float | None]:
+    """Order-sensitive companion to check_expected_sources().
+
+    Returns (mrr, top1):
+      mrr  - 1 / (1-based rank of the first expected source); 0.0 if none of
+             them were retrieved at all.
+      top1 - 1.0 if the highest-ranked retrieved source is an expected one.
+    Both are None when the case declares no expected sources.
+
+    REPORT-ONLY: deliberately absent from OVERALL_SCORE_WEIGHTS. Giving it a
+    weight would renormalise every historical overall_score and re-run
+    assign_status(), conflating "a metric was added" with "retrieval improved".
+
+    check_expected_sources() is a set hit rate, so on a collection small enough
+    that top_k covers all of it the set is frozen and only the order can move.
+    This is the metric that can see that movement.
+
+    Caveat: for question_answering_all, answer_query_all_eval() in agent/rag.py
+    builds its source list collection-major, so fan-out MRR folds collection
+    iteration order over within-collection rank. Treat fan-out MRR as
+    directional only; single-collection cases are the honest signal.
+    """
+    if not expected_sources:
+        return None, None
+    expected_lower = {_lower(source) for source in expected_sources}
+    mrr = 0.0
+    for rank, source in enumerate(retrieved_sources, start=1):
+        if _lower(source) in expected_lower:
+            mrr = round(1.0 / rank, 4)
+            break
+    top1 = 1.0 if retrieved_sources and _lower(retrieved_sources[0]) in expected_lower else 0.0
+    return mrr, top1
+
+
 def check_expected_facts(answer: str, expected_facts: list[str]) -> tuple[float | None, list[str], list[str]]:
     if not expected_facts:
         return None, [], []
@@ -139,6 +176,7 @@ def build_deterministic_scores(
     require_collection_citation: bool,
 ) -> DeterministicScores:
     source_score, matched_sources, missing_sources = check_expected_sources(retrieved_sources, expected_sources)
+    source_mrr, source_top1 = check_expected_source_rank(retrieved_sources, expected_sources)
     fact_score, matched_facts, missing_facts = check_expected_facts(answer, expected_facts)
     section_score, matched_sections, missing_sections = check_required_sections(answer, required_sections)
     missing_flag_score, matched_flags, missing_flags = check_missing_evidence_flags(answer, expected_missing_evidence_flags)
@@ -157,6 +195,8 @@ def build_deterministic_scores(
 
     return DeterministicScores(
         expected_source_hit_rate=source_score,
+        expected_source_mrr=source_mrr,
+        expected_source_top1=source_top1,
         expected_fact_coverage=fact_score,
         required_section_compliance=section_score,
         missing_evidence_flag_compliance=missing_flag_score,
