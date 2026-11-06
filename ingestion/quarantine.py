@@ -55,8 +55,19 @@ def classify_exception(exc: Exception) -> ErrorType:
     genuinely unreadable or unparseable file should end up as CORRUPT_FILE.
     """
     try:
-        from qdrant_client.http.exceptions import UnexpectedResponse
+        from qdrant_client.http.exceptions import (
+            ResponseHandlingException,
+            UnexpectedResponse,
+        )
 
+        # A connection-level failure reaching Qdrant: refused, reset, or timed
+        # out before any HTTP status came back. It subclasses ApiException, not
+        # OSError, and its str() is frequently empty, so neither the OSError
+        # branch nor the _TRANSIENT_MARKERS text scan below can catch it -- it
+        # would otherwise fall through to CORRUPT_FILE and quarantine a healthy
+        # file permanently, because CORRUPT_FILE is not in RETRYABLE_ERRORS.
+        if isinstance(exc, ResponseHandlingException):
+            return ErrorType.TRANSIENT_ERROR
         if isinstance(exc, UnexpectedResponse) and exc.status_code in (429, 500, 502, 503, 504):
             return ErrorType.TRANSIENT_ERROR
     except Exception:
