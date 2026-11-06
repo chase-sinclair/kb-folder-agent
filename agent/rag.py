@@ -107,9 +107,9 @@ _SYSTEM_DRAFT = (
     "Rules:\n"
     "1. Write professional proposal prose — not bullet points, not a summary. This must read like a real proposal section.\n"
     "2. Directly address every element of the requirement. Mirror the requirement's language in your response.\n"
-    "3. Pull specific facts from the knowledge base: contract values, dates, CPARS ratings, COR names, agency names, technical metrics.\n"
+    "3. Pull specific facts from the knowledge base: contract values, dates, quoted COR praise, COR names, agency names, technical metrics.\n"
     "4. Where the knowledge base has no evidence for a specific required element, insert [EVIDENCE MISSING: <what's needed>] inline at that point.\n"
-    "5. Never fabricate — every specific claim must trace to the provided content.\n"
+    "5. Never fabricate — every specific claim must trace to the provided content and cite its source filename in parentheses, e.g. (2023_DHS_CyberTransformation.md).\n"
     "6. Open with a strong topic sentence that directly addresses the requirement.\n"
     "7. Write 3–4 focused paragraphs, each addressing a distinct aspect of the requirement.\n"
     "8. End with a single line starting exactly with 'Coverage:' that summarizes which requirement elements were "
@@ -224,6 +224,13 @@ async def _call_claude(system: str, user: str) -> str:
 # ---------------------------------------------------------------------------
 # Public functions
 # ---------------------------------------------------------------------------
+
+# WIDE_RETRIEVAL: reranking is scoped to question_answering (top_k=5, ~9% of a
+# 54-chunk collection), where it measured +4.7 points on the 24-case benchmark.
+# score (15), draft (20), gaps (20) and compare (10) already retrieve 19-37% of
+# a collection, so reordering barely changes the context. Measured 2026-11-06:
+# reranking moved 7 of 8 cases on the original pack not at all and cost 0.05 on
+# requirement_scoring, while adding 0.8-1.7s and a Haiku call to each.
 
 async def answer_query(collection_name: str, query: str) -> RagResult:
     if not query or not query.strip():
@@ -394,7 +401,8 @@ async def draft_section(collection_name: str, requirement: str) -> RagResult:
         )
 
     try:
-        results = await search(collection_name, requirement, top_k=20)
+        # rerank=False: see WIDE_RETRIEVAL note above.
+        results = await search(collection_name, requirement, top_k=20, rerank=False)
 
         if not results:
             return RagResult(
@@ -438,8 +446,9 @@ async def compare_collections(
 
     try:
         results_a, results_b = await asyncio.gather(
-            search(collection_name_a, question, top_k=10),
-            search(collection_name_b, question, top_k=10),
+            # rerank=False: see WIDE_RETRIEVAL note above.
+            search(collection_name_a, question, top_k=10, rerank=False),
+            search(collection_name_b, question, top_k=10, rerank=False),
         )
 
         if not results_a:
@@ -495,7 +504,8 @@ async def score_requirement(collection_name: str, requirement: str) -> RagResult
         )
 
     try:
-        results = await search(collection_name, requirement, top_k=15)
+        # rerank=False: see WIDE_RETRIEVAL note above.
+        results = await search(collection_name, requirement, top_k=15, rerank=False)
 
         if not results:
             return RagResult(
@@ -525,7 +535,8 @@ async def find_gaps(collection_name: str, topic: str) -> RagResult:
     if not topic or not topic.strip():
         return RagResult(answer="Please provide a topic.", sources=[], collection_name=collection_name, result_count=0)
     try:
-        results = await search(collection_name, topic, top_k=20)
+        # rerank=False: see WIDE_RETRIEVAL note above. +1.7s here, no gain.
+        results = await search(collection_name, topic, top_k=20, rerank=False)
 
         if len(results) < 5:
             return RagResult(
