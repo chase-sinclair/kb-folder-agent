@@ -45,10 +45,22 @@ def _int_env(name: str, default: int) -> int:
 RERANK_CANDIDATE_MULTIPLIER = _int_env("RERANK_CANDIDATE_MULTIPLIER", 3)
 RERANK_MAX_CANDIDATES = _int_env("RERANK_MAX_CANDIDATES", 40)
 
+# Over-fetch WITHOUT reranking. query_collection sizes each RRF leg at
+# fetch_k * 2, so a deeper fetch_k changes which chunks survive fusion even
+# with no LLM in the path -- recall and ranking are separate effects and this
+# knob is what lets them be measured apart. The 2026-11-06 benchmark showed one
+# case (P13) failing purely on recall: the answer-bearing chunk was never
+# fetched, so no amount of reordering 5 chunks could have reached it.
+# Default 1 is a no-op, which keeps the no-rerank path byte-identical to the
+# pre-reranker behaviour and therefore keeps the archived baselines valid.
+SEARCH_OVERFETCH_MULTIPLIER = _int_env("SEARCH_OVERFETCH_MULTIPLIER", 1)
 
 
-def _candidate_k(top_k: int) -> int:
-    return max(top_k, min(top_k * RERANK_CANDIDATE_MULTIPLIER, RERANK_MAX_CANDIDATES))
+def _candidate_k(top_k: int, multiplier: int | None = None) -> int:
+    """Candidate pool size, capped. multiplier=None uses the rerank multiplier."""
+    if multiplier is None:
+        multiplier = RERANK_CANDIDATE_MULTIPLIER
+    return max(top_k, min(top_k * multiplier, RERANK_MAX_CANDIDATES))
 
 
 async def get_available_collections() -> list[dict]:
@@ -82,7 +94,11 @@ async def search(collection_name: str, query: str, top_k: int = 5, *, rerank: bo
     """
     try:
         use_rerank = rerank and reranker.rerank_enabled()
-        fetch_k = _candidate_k(top_k) if use_rerank else top_k
+        fetch_k = (
+            _candidate_k(top_k)
+            if use_rerank
+            else _candidate_k(top_k, SEARCH_OVERFETCH_MULTIPLIER)
+        )
         vector = await embed_query(query)
         hits = await query_collection(
             collection_name=collection_name,
@@ -139,7 +155,11 @@ async def search_all_collections(
     if not collections:
         return {}
     use_rerank = rerank and reranker.rerank_enabled()
-    fetch_k = _candidate_k(top_k_per_collection) if use_rerank else top_k_per_collection
+    fetch_k = (
+        _candidate_k(top_k_per_collection)
+        if use_rerank
+        else _candidate_k(top_k_per_collection, SEARCH_OVERFETCH_MULTIPLIER)
+    )
     vector = await embed_query(query)
     results = {}
     for col in collections:

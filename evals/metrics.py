@@ -1,3 +1,5 @@
+import re
+
 from evals.config import OVERALL_SCORE_WEIGHTS, PASS_THRESHOLD, WARN_THRESHOLD
 from evals.schema import DeterministicScores
 
@@ -142,22 +144,66 @@ def check_citation_presence(
     return has_source, 1.0 if has_source else 0.0
 
 
+# Literal phrases that have always counted as a refusal. Kept verbatim so a
+# historical run's not_found_handling score cannot change for a reason other
+# than the patterns added below.
+_NOT_FOUND_LITERALS = (
+    "not found",
+    "not in the context",
+    "not in this knowledge base",
+    "no relevant content",
+    "i could not find",
+    "not provided",
+    "cannot answer",
+    "can't answer",
+    "there is no information",
+    "no information",
+)
+
+# The literal list above recognised only two refusal templates, so on the
+# 2026-11-06 benchmark run 4 of 6 correct abstentions scored 0.00 — including
+# one that refused AND warned that the in-context shift model belonged to a
+# different program, exactly the conflation its case exists to catch. The
+# phrasings it missed:
+#   "I don't have information about ..."      -> "no information" is absent
+#   "I cannot provide the evidence ..."       -> not "cannot answer"
+#   "I cannot fully answer your question"     -> "fully" breaks the substring
+# These two patterns cover the inability and absence constructions generally.
+# Deliberately NOT a bare "does not include": this score is only computed when
+# expected_not_found is True, so an over-loose pattern would credit an answer
+# that fabricated evidence and merely mentioned an omission in passing.
+_NOT_FOUND_PATTERNS = (
+    # "cannot answer" / "cannot fully answer" / "can't provide" / "unable to locate"
+    re.compile(
+        r"\b(?:cannot|can\s?not|can't|could\s?n(?:o|')t|unable\s+to)\s+"
+        r"(?:\w+\s+){0,2}"
+        r"(?:answer|provide|confirm|determine|verify|identify|find|locate|supply|produce|cite)\b"
+    ),
+    # "don't have information" / "does not contain any evidence" / "no record of"
+    re.compile(
+        r"\b(?:(?:do|does|did)(?:\s+not|\s?n[o']t)\s+(?:appear\s+to\s+)?"
+        r"(?:have|contain|include|provide|document|record|reflect|specify)|"
+        r"\bno|\bnot\s+any|\blacks?|\bwithout)\s+"
+        r"(?:\w+\s+){0,3}"
+        r"(?:information|evidence|record|records|documentation|artifact|artifacts|"
+        r"detail|details|data|rating|ratings|outcome|proof|reference|references)\b"
+    ),
+)
+
+
 def check_not_found_handling(answer: str) -> tuple[bool, float]:
+    """Did the answer refuse, rather than invent evidence the KB does not hold?
+
+    Only computed for cases with expected_not_found=True. A miss here is scored
+    as a hallucination, so the detector has to recognise refusals as the model
+    actually writes them, not just two fixed templates.
+    """
     answer_lower = _lower(answer)
-    signals = [
-        "not found",
-        "not in the context",
-        "not in this knowledge base",
-        "no relevant content",
-        "i could not find",
-        "not provided",
-        "cannot answer",
-        "can't answer",
-        "there is no information",
-        "no information",
-    ]
-    detected = any(signal in answer_lower for signal in signals)
-    return detected, 1.0 if detected else 0.0
+    if any(signal in answer_lower for signal in _NOT_FOUND_LITERALS):
+        return True, 1.0
+    if any(pattern.search(answer_lower) for pattern in _NOT_FOUND_PATTERNS):
+        return True, 1.0
+    return False, 0.0
 
 
 def build_deterministic_scores(

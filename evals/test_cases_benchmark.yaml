@@ -1,0 +1,562 @@
+# ConsultingKB benchmark pack — 14 positive cases (P1-P14) and 10 protected
+# negatives (N1-N10), from section 6 / Gate D of
+# ConsultingKB_Final_Handoff_to_RAG_Implementation.md (2026-11-05).
+#
+# Kept separate from test_cases.yaml and test_cases_rerank.yaml so each pack's
+# archived runs stay directly comparable.
+#
+# EVERY expected_fact below was verified as a literal substring of the actual
+# corpus file on 2026-11-06, not copied from the handoff. Five handoff anchors
+# did not survive that check and would have scored 0 as false failures:
+#   - "14 legacy tools"      -> the DHS file says "14 legacy security tools"
+#   - "47 applications"      -> that exact phrase is in Sarah_Chen_PM.md; the DoD
+#                               file says "47 mission-critical DoD applications"
+#   - "v2.1" / "v1.4"        -> the whitepapers carry "**Version:** 2.1" / "1.4"
+#   - "8x query performance" -> the file uses a multiplication sign: "8x faster"
+#   - DoD "IL4 and IL5"      -> IL4/IL5 covers 12 of the 47 apps, not all 47
+# Anchors here also avoid en dashes and multiplication signs, which the baseline
+# files use but which make brittle substring probes.
+#
+# A NOTE ON unacceptable_claims: check_unacceptable_claims() is a case-insensitive
+# substring scan, and a hit demotes the case in assign_status() regardless of
+# score. That makes it reliable for literals that appear NOWHERE in the corpus
+# (verified absent corpus-wide: CPARS, VPAT, ConMon, accessibility conformance,
+# polygraph, protest) and for figures owned by a different program. It CANNOT
+# catch a misattribution, because a correct answer that says "Nakamura lacks
+# zero-trust experience" contains the same substring as a wrong one. Attribution
+# errors are caught by expected_sources/MRR plus the per-case retrieval trace
+# review in the Phase C report, not by this field.
+
+test_cases:
+  # =========================================================================
+  # Positive and ambiguity cases
+  # =========================================================================
+
+  - id: bench_p01_pm_dhs
+    name: P1 - PM resume for DHS modernization with FedRAMP High and zero-trust
+    task_type: question_answering
+    collection: Resumes
+    query: Which program manager resume best supports a DHS cybersecurity modernization effort that requires FedRAMP High authorization experience and hands-on zero-trust implementation?
+    expected_sources:
+      - Sarah_Chen_PM.md
+    expected_facts:
+      - FedRAMP High
+      - zero-trust
+      - CISSP
+    required_sections: []
+    unacceptable_claims:
+      - Nakamura holds a CISSP
+      - Nakamura led zero-trust
+    notes: >
+      The headline decoy test. Thomas_Nakamura_PM.md is engineered to win on
+      surface vocabulary: same Top Secret/SCI, same PMP, 15 years, and heavy use
+      of "cybersecurity", "modernization", "enterprise", "authorization" and
+      "continuous monitoring" — the latter appears ONLY in his file corpus-wide.
+      Verified: Nakamura carries FedRAMP Moderate twice and has zero occurrences
+      of DHS, zero-trust, CISSP or SIEM. Sarah Chen has all four. Both resumes
+      are 8 and 5 chunks of a 58-chunk collection, so top_k=5 genuinely binds.
+
+  - id: bench_p02_va_pipeline
+    name: P2 - who built the VA 4.2TB/day fraud-detection pipeline
+    task_type: question_answering
+    collection: Resumes
+    query: Who architected the 4.2TB per day machine learning fraud-detection data pipeline for the VA, and what platform did they build it on?
+    expected_sources:
+      - James_Okafor_DataEngineer.md
+    expected_facts:
+      - 4.2TB
+      - AWS GovCloud
+    required_sections: []
+    unacceptable_claims:
+      - Elena Vasquez architected
+      - Vasquez built the 4.2TB
+    notes: >
+      Elena_Vasquez_DataScientist.md is the decoy: ML and fraud vocabulary, a
+      federal analytics platform, AWS, model deployment — but verified NOT to
+      contain 4.2TB, $14M or AWS GovCloud data-lake ownership. "4.2TB" is owned
+      by exactly two files, both about the same program (the VA write-up and
+      Okafor's resume), which the handoff documents as legitimate reuse.
+
+  - id: bench_p03_siem_split
+    name: P3 - which program used Elastic Security vs Splunk ES
+    task_type: question_answering
+    collection: PastPerformance
+    query: Which security operations program consolidated onto Elastic Security and which one onto Splunk Enterprise Security, and what detection or response improvement did each report?
+    expected_sources:
+      - 2021_DOE_SOC_Consolidation.md
+      - 2023_DHS_CyberTransformation.md
+    expected_facts:
+      - Elastic Security
+      - Splunk Enterprise Security
+      - 5,300 endpoints
+      - 6,200 endpoints
+    required_sections: []
+    unacceptable_claims:
+      - DOE deployed Splunk
+      - Elastic Security at DHS
+    notes: >
+      Both programs must be retrieved and kept apart. The DOE file is a
+      deliberate lexical decoy for DHS, loaded with "cybersecurity
+      modernization", "SIEM consolidation" and "Office of the CISO" while every
+      DHS specific stays out. Verified exclusive to DHS: "Splunk Enterprise
+      Security", "14 legacy security tools", "6,200 endpoints", "67%", "7.2
+      hours". Verified DOE-side: "Elastic Security", "11 legacy tools", "5,300
+      endpoints", "mean time to respond falling from 96 to 54 minutes" — a
+      response metric, deliberately not the MTTD metric DHS reports.
+
+  - id: bench_p04_migration_platforms
+    name: P4 - compare DoD, HHS and USDA migration platforms and status
+    task_type: question_answering
+    collection: PastPerformance
+    query: "Compare our three federal cloud migration programs: which cloud platform did each use, how many applications did each move, and which are complete versus still in progress?"
+    expected_sources:
+      - 2021_DoD_CloudMigration.md
+      - 2022_HHS_CloudMigration.md
+      - 2023_USDA_CloudMigration.md
+    expected_facts:
+      - Azure Government
+      - AWS GovCloud
+      - Assured Workloads
+      - 32 applications
+      - 19 of 28 applications
+    required_sections: []
+    unacceptable_claims:
+      - IL5 authorization for the HHS
+      - Azure Government for USDA
+    notes: >
+      A three-way near-miss cluster where the platform, application count and
+      completion status are the only discriminators. Verified exclusive: DoD
+      Azure Government with IL4/IL5 for 12 of 47 apps (the handoff's claim that
+      IL4/IL5 covered all 47 is wrong); HHS AWS GovCloud / 32 applications; USDA
+      GCP Assured Workloads / 19 of 28 / in progress. Three PastPerformance
+      files out of 9 in a 57-chunk collection, so top_k=5 cannot hold all of
+      them plus noise — this case measures whether retrieval spreads across the
+      cluster or collapses onto one member.
+
+  - id: bench_p05_analytics_metrics
+    name: P5 - SSA alert latency vs VA flagged-claims outcome
+    task_type: question_answering
+    collection: PastPerformance
+    query: Compare the daily data volume and analyst population on the SSA benefits analytics platform against the VA data analytics program, and state the different outcome metric each one reported.
+    expected_sources:
+      - 2024_SSA_BenefitsAnalytics.md
+      - 2022_VA_DataAnalytics.md
+    expected_facts:
+      - 860 analysts
+      - 2,400
+      - 4.2TB
+    required_sections: []
+    unacceptable_claims:
+      - SSA ingested 4.2TB
+      - 2,400 SSA analysts
+    notes: >
+      Verified distinct: SSA runs 6 TB/day for 860 analysts with a stream
+      processing emphasis; VA runs 4.2TB/day for 2,400 analysts with a data lake
+      and $14M in flagged claims. The failure mode this catches is volume and
+      population figures migrating between the two programs. Note that "2,400"
+      appears in four files, so it is a weak anchor on its own and is paired
+      with the 860 figure, which is unique.
+
+  - id: bench_p06_fcais_terms
+    name: P6 - FCAIS ceiling, order maximum, CO and contracted PM rate
+    task_type: question_answering
+    collection: Contracts
+    query: Under our standard mutual confidentiality obligations with a teaming partner, what are the actual ceiling value, maximum order limitation, contracting officer and senior program manager labor rate on our government-wide contract vehicle?
+    expected_sources:
+      - IDIQ_GovCloud_Services_2023.md
+    expected_facts:
+      - $85,000,000
+      - Patricia Huang
+      - $15,000,000
+    required_sections: []
+    unacceptable_claims:
+      - RATE SCHEDULE - ATTACHMENT B
+      - rate schedule is attached
+    notes: >
+      TeamingAgreement_Subcontractor_Standard.md is the decoy: saturated with
+      "ceiling", "ordering period", "labor category", "task order", "rate
+      schedule" and "maximum order limitation" used as contractual obligations,
+      with no dollar figures and a bracketed placeholder instead of a rate
+      table. Retrieving it and answering from it is the failure. Verified
+      unique to the IDIQ: Patricia Huang, $15,000,000, $2,500. Contracts went
+      from 8 chunks to 54, so unlike the earlier rerank pack this case now has
+      real headroom — four confusable vehicle summaries compete.
+
+  - id: bench_p07_mod_0004
+    name: P7 - what changed under DOJ Bureau of Prisons Mod 0004
+    task_type: question_answering
+    collection: Contracts
+    query: What did Modification 0004 change on the DOJ Bureau of Prisons task order, and what were the previous and revised funded values?
+    expected_sources:
+      - TaskOrderMod_GovCloud_0004.md
+    expected_facts:
+      - $2,300,000
+      - $2,640,000
+      - $340,000
+    required_sections: []
+    unacceptable_claims:
+      - ceiling was raised to $85,000,000
+      - modified the parent vehicle ceiling
+    notes: >
+      The discrimination here is parent-vehicle versus order-level money. The
+      modification sits under FCAIS and legitimately cites GS-35F-0482W and the
+      $85,000,000 ceiling, so an agent can easily report the ceiling as the
+      thing that changed. Verified unique to the mod file: $2,300,000,
+      $2,640,000, $340,000, "Modification 0004".
+
+  - id: bench_p08_bid_prices
+    name: P8 - EPA and Interior evaluated and conditional bid prices
+    task_type: question_answering
+    collection: CostVolume
+    query: What are the total evaluated price and the conditional discounted price for the EPA data platform pursuit and for the Interior cloud migration pursuit?
+    expected_sources:
+      - Pricing_DataPlatform_Pursuit_2024.md
+      - Pricing_CloudMigration_Pursuit_2023.md
+    expected_facts:
+      - $4,689,300
+      - $4,643,100
+      - $5,416,483.81
+      - $5,358,168.81
+    required_sections: []
+    unacceptable_claims:
+      - GOVERNMENT IGCE FIGURE
+      - PROPOSED RATE
+      - $5,541,766
+    notes: >
+      Two pricing strategies must be retrieved together and their four figures
+      kept straight, while CostRealism_Response_Template.md competes on pure
+      pricing vocabulary with bracketed placeholders and no figures, and
+      PricingStrategy_Notes.md offers a third, unrelated total ($5,541,766) that
+      belongs to the SOC pursuit. All four figures verified unique to their own
+      file. A bracketed placeholder in the answer means the template was used as
+      evidence.
+
+  - id: bench_p09_indirect_rates
+    name: P9 - FY2024 indirect-rate assumptions vs computed billable rate
+    task_type: question_answering
+    collection: CostVolume
+    query: What are our FY2024 provisional fringe, overhead, G and A and fee rates, their basis of allocation, and what fully burdened billable rate do they produce for a senior program manager?
+    expected_sources:
+      - IndirectRates_Memo_FY2024.md
+      - RateBuildup_Labor_Categories_2024.md
+    expected_facts:
+      - $217.72
+    required_sections: []
+    unacceptable_claims:
+      - $195.00 per hour fully burdened
+      - $195/hr is the FY2024
+    notes: >
+      A deliberate split: the memo holds the provisional rates, their basis and
+      DCAA submission status; the build-up walks direct salary through to a
+      billable rate. A correct answer needs both. The trap is the FCAIS
+      contracted $195/hr PM rate, a GSA-scheduled ceiling from a different
+      vehicle and period, being reported as the FY2024 computed rate. Verified
+      unique to the build-up: $217.72, $180.18, $165.17.
+
+  - id: bench_p10_soc_price_and_tech
+    name: P10 - SOC pursuit price position AND technical differentiator
+    task_type: question_answering_all
+    query: What is our price position and our technical differentiator for the federal SOC modernization pursuit?
+    expected_sources:
+      - PricingStrategy_Notes.md
+      - TechnicalApproach_CyberSOC.md
+    expected_facts:
+      - $4.2M
+      - AI-assisted threat detection
+    required_sections: []
+    unacceptable_claims:
+      - GOVERNMENT IGCE FIGURE
+      - PROPOSED RATE
+    notes: >
+      The single most diagnostic case in the pack, and the one the handoff flags
+      as unresolved. Fan-out takes only 3 chunks per collection. Verified chunk
+      map of PricingStrategy_Notes.md: chunk 1 is a 27-word header with NO
+      dollar figures, and the win price target ($4.2M to $4.8M) lives in chunk
+      2. So if CostVolume's three slots return the cost-realism decoy, the SOC
+      staffing BOE and only chunk 1, expected_source_hit_rate scores 1.0 while
+      expected_fact_coverage scores 0 — the right document, not the answer.
+      That divergence between the two metrics IS the result; read the retrieval
+      trace, not the headline score. Also note MRR here is collection-major
+      (answer_query_all_eval builds flat_sources per collection), so treat
+      fan-out MRR as directional only.
+
+  - id: bench_p11_zerotrust_vs_soc
+    name: P11 - generic zero-trust reference model vs SOC-specific evidence
+    task_type: question_answering
+    collection: TechnicalVolume
+    query: For a SOC modernization bid requiring zero-trust implementation and AI-assisted threat detection, what deployment evidence do we actually hold as opposed to generic reference architecture?
+    expected_sources:
+      - TechnicalApproach_CyberSOC.md
+    expected_facts:
+      - AI-assisted threat detection
+    required_sections: []
+    unacceptable_claims:
+      - 384 deployed devices
+      - 384 endpoints in production
+    notes: >
+      Architecture_ZeroTrust_ReferenceModel.md is the decoy, deliberately
+      saturated with zero-trust, micro-segmentation, identity-centric,
+      continuous verification, policy enforcement point, SIEM integration and
+      FedRAMP vocabulary. Its figures are 384 SIMULATED devices — verified
+      unique to that file — so citing them as deployment evidence is the
+      failure, which is why the figure is an unacceptable claim here. A keyword
+      query should surface the reference model first and then fail to answer.
+
+  - id: bench_p12_availability
+    name: P12 - QASP acceptance floor vs cloud design availability target
+    task_type: question_answering
+    collection: TechnicalVolume
+    query: What system availability figure do we commit to as a contractual acceptable quality level, and what availability figure do we state as a design goal, and what is the difference between the two?
+    expected_sources:
+      - QualityApproach_QASP_Standard.md
+      - TechnicalApproach_CloudMigration.md
+    expected_facts:
+      - "99.85"
+      - "99.96"
+    required_sections: []
+    unacceptable_claims:
+      - we achieved 99.96
+      - we delivered 99.96
+    notes: >
+      A dated tension, not a contradiction: 99.85% is a proposed acceptance
+      floor (September), 99.96% a design target (July). Both verified unique to
+      their own file. Both are PROSPECTIVE planning numbers, so reporting either
+      as measured client availability is the failure this case watches for.
+
+  - id: bench_p13_throughput
+    name: P13 - March phase-in throughput vs July design throughput
+    task_type: question_answering
+    collection: TechnicalVolume
+    query: How many applications per month do we plan to migrate, and why do our transition plan and our cloud migration approach give different throughput figures?
+    expected_sources:
+      - TransitionPlan_Phase_In_Standard.md
+      - TechnicalApproach_CloudMigration.md
+    expected_facts:
+      - 2 applications per month
+      - 7 applications per month
+    required_sections: []
+    unacceptable_claims:
+      - we migrated 7 applications per month
+      - throughput of 7 applications per month was achieved
+    notes: >
+      Both figures verified unique to their own file. The correct answer
+      reconciles them by date and assumption (conservative phase-in in March
+      versus a trained-team design in July), not by picking one. An answer that
+      presents either as historical delivery has conflated proposed with
+      achieved.
+
+  - id: bench_p14_whitepapers
+    name: P14 - DevSecOps release framework vs data modernization framework
+    task_type: question_answering
+    collection: TechnicalVolume
+    query: "Compare our DevSecOps release framework with our data modernization framework: how many phases does each define, what version and date does each carry, and what outcome metrics does each report?"
+    expected_sources:
+      - DevSecOps_Pipeline_WhitePaper.md
+      - DataModernization_WhitePaper.md
+    expected_facts:
+      - 126 release candidates
+      - 5-phase
+      - $127M
+    required_sections: []
+    unacceptable_claims:
+      - 126 release candidates across 11 federal engagements
+    notes: >
+      Two whitepapers with the same shape: abstract, numbered framework, phase
+      sections, an engagement-count claim, a metrics section. Verified: the
+      DevSecOps paper is Version 1.4 with 126 release candidates, 118 first-pass
+      promotions and a 17-minute median across seven anonymous engagements; the
+      data paper is Version 2.1, 5-phase, 11 federal engagements, $127M, and an
+      "8x faster" query improvement written with a multiplication sign. The
+      handoff's "v1.4" and "v2.1" and "8x" forms do not appear literally, which
+      is why they are not used as anchors here.
+
+  # =========================================================================
+  # Protected negatives — missing evidence must be reported as missing
+  # =========================================================================
+
+  - id: bench_n01_soc_award
+    name: N1 - did we win HQ-2024-SOC-0041
+    task_type: not_found
+    collection: CostVolume
+    query: Did we win solicitation HQ-2024-SOC-0041, and what was the award amount and performance start date?
+    expected_sources: []
+    expected_facts: []
+    required_sections: []
+    expected_not_found: true
+    unacceptable_claims: []
+    notes: >
+      HQ-2024-SOC-0041 appears in four files (the NDA template as an example
+      Purpose, the SOC BOE, PricingStrategy_Notes and the CyberSOC approach) and
+      none states an outcome — the pursuit is open by design. Plenty of
+      retrievable context exists, which is exactly what makes inventing an
+      award tempting. "protest" is verified absent corpus-wide.
+
+  - id: bench_n02_cpars
+    name: N2 - CPARS rating on a past-performance contract
+    task_type: not_found
+    collection: PastPerformance
+    query: What CPARS rating did we receive on the DHS Cyber Transformation program, and what adjectival score was recorded for quality and schedule?
+    expected_sources: []
+    expected_facts: []
+    required_sections: []
+    expected_not_found: true
+    unacceptable_claims: []
+    notes: >
+      "CPARS" is verified ABSENT from all 40 documents. Quoted COR praise is the
+      deliberate substitute, so the failure mode is converting a COR quotation
+      into a rating. Because the term appears nowhere, the substring scan is
+      exact here: any occurrence in the answer is a fabrication.
+
+  - id: bench_n03_dhs_staffing
+    name: N3 - historical 24/7 Tier 1-3 staffing on DHS Cyber Transformation
+    task_type: not_found
+    collection: PastPerformance
+    query: Show the historical 24/7 Tier 1 through Tier 3 analyst shift staffing model we actually operated on the DHS Cyber Transformation program.
+    expected_sources: []
+    expected_facts: []
+    required_sections: []
+    expected_not_found: true
+    unacceptable_claims: []
+    notes: >
+      Verified: "24/7" and "Tier 1" occur in exactly one file corpus-wide,
+      TechnicalApproach_CyberSOC.md, where they describe PROPOSED coverage for
+      an open pursuit. Neither appears anywhere in PastPerformance. Since this
+      case is scoped to PastPerformance, either substring in the answer means
+      proposed SOC staffing or DOE shift detail was imported into DHS history.
+
+  - id: bench_n04_disa_fedramp_high
+    name: N4 - did DoD DISA operate a FedRAMP High system
+    task_type: question_answering
+    collection: PastPerformance
+    query: On the DoD DISA cloud migration, what authorization level did we achieve, and was it a FedRAMP High authorization?
+    expected_sources:
+      - 2021_DoD_CloudMigration.md
+    expected_facts:
+      - IL4
+      - IL5
+      - Azure Government
+    required_sections: []
+    unacceptable_claims:
+      - DISA achieved FedRAMP High
+      - DISA operated a FedRAMP High
+    notes: >
+      Unlike N1-N3 the answer does exist: the DISA context is Azure Government
+      with IL4 and IL5 for 12 of 47 applications. The failure is importing
+      "FedRAMP High", which is verified to occur in only two files, both about
+      DHS. Note the DoD file does NOT contain the literal "47 applications" —
+      it says "47 mission-critical DoD applications" and "47 app migrations".
+
+  - id: bench_n05_okafor_dhs
+    name: N5 - was James Okafor staffed on DHS Cyber Transformation
+    task_type: question_answering
+    collection: Resumes
+    query: Was James Okafor staffed on the DHS Cyber Transformation program, and if he has DHS experience, which DHS engagement was it?
+    expected_sources:
+      - James_Okafor_DataEngineer.md
+    expected_facts:
+      - James Okafor
+    required_sections: []
+    unacceptable_claims:
+      - Okafor on the DHS Cyber Transformation
+      - Okafor supported DHS Cyber Transformation
+    notes: >
+      His DHS Data Modernization work is a separate assignment from DHS Cyber
+      Transformation. The correct answer distinguishes the two engagements
+      rather than collapsing them because both say DHS.
+
+  - id: bench_n06_section_508
+    name: N6 - Section 508 dashboard accessibility artifact
+    task_type: not_found
+    collection: TechnicalVolume
+    query: Provide our Section 508 accessibility conformance report or VPAT for a dashboard deliverable, including the accessibility testing tooling and remediation plan we used.
+    expected_sources: []
+    expected_facts: []
+    required_sections: []
+    expected_not_found: true
+    unacceptable_claims: []
+    notes: >
+      Protected gap 1 of 3. "VPAT" and "accessibility conformance" are verified
+      absent corpus-wide; "Section 508" occurs in exactly two files, as a
+      passing compliance obligation, never as an artifact. A passing mention is
+      not operational proof, and the correct behaviour is to say the artifact
+      does not exist rather than to describe the mention as one.
+
+  - id: bench_n07_fedramp_high_ops
+    name: N7 - proof of operating a FedRAMP High system
+    task_type: not_found
+    collection: TechnicalVolume
+    query: Provide evidence that we have operated a FedRAMP High system in production, specifically monthly continuous monitoring deliverables, ConMon scan reporting and POA and M management at the High baseline.
+    expected_sources: []
+    expected_facts: []
+    required_sections: []
+    expected_not_found: true
+    unacceptable_claims: []
+    notes: >
+      Protected gap 2 of 3, and the one with the subtlest scope. The corpus
+      legitimately discusses FedRAMP authorization approach, boundary definition
+      and a DHS High authorization milestone; what is missing is OPERATIONS
+      evidence. So this case must not be read as "FedRAMP High should be
+      absent" — only the operating proof is. "ConMon" is verified absent
+      corpus-wide, which makes it a clean fabrication marker.
+
+  - id: bench_n08_datamod_reference
+    name: N8 - named data-modernization past-performance reference in TechnicalVolume
+    task_type: not_found
+    collection: TechnicalVolume
+    query: Name a data modernization past performance reference from our technical volume, with the client name, contract number and contracting officer representative we can cite.
+    expected_sources: []
+    expected_facts: []
+    required_sections: []
+    expected_not_found: true
+    unacceptable_claims:
+      - $127M across 11 named
+    notes: >
+      Protected gap 3 of 3, scoped specifically to the TechnicalVolume evidence
+      set — not a claim that no data-modernization name appears anywhere in the
+      40 documents. The whitepaper cites "11 federal engagements totaling $127M"
+      anonymously and that is the correct level of specificity. Substituting
+      named cloud-migration history, or attaching a client name to the
+      anonymous aggregate, is the failure.
+
+  - id: bench_n09_template_as_price
+    name: N9 - cost-realism template treated as a win-price target
+    task_type: question_answering
+    collection: CostVolume
+    query: What is our win price target and our price-to-win position, including the most probable cost and our unbalanced pricing posture?
+    expected_sources:
+      - PricingStrategy_Notes.md
+    expected_facts:
+      - $4.2M
+    required_sections: []
+    unacceptable_claims:
+      - PROPOSED RATE
+      - GOVERNMENT IGCE FIGURE
+    notes: >
+      Every phrase in this query is template vocabulary, which is what
+      CostRealism_Response_Template.md is built from — it holds the subject
+      matter of a pricing question with bracketed placeholders and no figures.
+      The answerable source is PricingStrategy_Notes.md, whose win price target
+      sits in chunk 2, not the header chunk. A bracketed placeholder appearing
+      in the answer proves the template was used as evidence.
+
+  - id: bench_n10_dod_pm_conflict
+    name: N10 - resolve the DoD program manager identity
+    task_type: question_answering
+    collection: PastPerformance
+    query: Who was the sole program manager on the DoD DISA cloud migration program?
+    expected_sources:
+      - 2021_DoD_CloudMigration.md
+    expected_facts:
+      - Brian Torres
+    required_sections: []
+    unacceptable_claims:
+      - Sarah Chen was the sole
+      - Brian Torres was the sole
+    notes: >
+      A pre-existing baseline contradiction, immutable by decision: the DoD
+      past-performance file names Lt. Col. (Ret.) Brian Torres as Program
+      Manager while Sarah_Chen_PM.md describes Sarah Chen as PM on the same
+      program. Both are baseline evidence. The correct behaviour is to surface
+      the conflict and cite both sources; asserting either as the sole answer is
+      the failure, which is why both assertions are unacceptable claims.
+      "Brian Torres" is verified unique to the DoD file.

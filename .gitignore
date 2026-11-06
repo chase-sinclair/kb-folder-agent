@@ -4,3 +4,14 @@ __pycache__/
 .DS_Store
 storage/*.db
 .onedrive_token_cache.json
+
+# Editor / local noise
+.vscode/
+*.log
+
+# Eval run artifacts are machine output and regenerable. The findings reports
+# that interpret them are deliverables and stay tracked, so the ignore is
+# pattern-based rather than whole-directory.
+evals/results/*.json
+evals/reports/eval_report_*.md
+evals/reports/eval_compare_*.md
