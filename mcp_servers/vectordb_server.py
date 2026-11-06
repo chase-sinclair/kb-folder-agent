@@ -13,7 +13,6 @@ from qdrant_client.models import (
     FieldCondition,
     Filter,
     MatchValue,
-    PointStruct,
     SparseIndexParams,
     SparseVector,
     SparseVectorParams,
@@ -149,10 +148,6 @@ async def _ensure_collection(client: AsyncQdrantClient, collection_name: str) ->
             raise
 
 
-def _point_id(file_path: str, chunk_index: int) -> int:
-    return abs(hash((file_path, chunk_index))) % (2**63)
-
-
 # ---------------------------------------------------------------------------
 # Tools
 # ---------------------------------------------------------------------------
@@ -250,36 +245,6 @@ async def query_collection(
             with_payload=True,
         )
         return _hits_to_dicts(response.points)
-    finally:
-        await client.close()
-
-
-@mcp.tool()
-async def add_documents(collection_name: str, documents: list[dict]) -> dict:
-    """Upserts documents into a collection, creating it if needed.
-
-    Each document must have: content, embedding, chunk_index, chunk_type, metadata, file_path
-    """
-    client = await _get_client()
-    try:
-        await _ensure_collection(client, collection_name)
-
-        points = [
-            PointStruct(
-                id=_point_id(doc["file_path"], doc["chunk_index"]),
-                vector=doc["embedding"],
-                payload={
-                    "content": doc["content"],
-                    "file_path": doc["file_path"],
-                    "chunk_type": doc["chunk_type"],
-                    "metadata": doc["metadata"],
-                },
-            )
-            for doc in documents
-        ]
-
-        await client.upsert(collection_name=collection_name, points=points)
-        return {"upserted_count": len(points), "collection_name": collection_name}
     finally:
         await client.close()
 

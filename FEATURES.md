@@ -83,10 +83,12 @@ The bot refuses or warns rather than returning a weak answer:
   against every collection and routes to the best match above a 0.35 confidence
   threshold. If the question looks comparative or multi-hop, it silently escalates
   to the agentic loop instead.
-- **Hybrid retrieval.** Every search runs a dense vector query and a BM25-style
-  sparse query in parallel, fused with Reciprocal Rank Fusion in Qdrant, with
-  automatic fallback to dense-only. Exact terms (contract numbers, names) and
-  semantic matches both land.
+- **Hybrid retrieval.** Every search issues two Qdrant queries — a dense vector
+  query and a BM25-style sparse query, each pulling twice the requested depth —
+  and fuses the two ranked lists with Reciprocal Rank Fusion (`k=60`) in Python,
+  in `_rrf_merge()`. Fusion is client-side, not Qdrant's server-side `Fusion.RRF`.
+  If either query fails the search falls back to dense-only. Exact terms
+  (contract numbers, names) and semantic matches both land.
 - **Daily digest.** With `DIGEST_ENABLED=true`, a scheduled summary of KB activity
   posts to `DIGEST_CHANNEL` at `DIGEST_TIME` (UTC).
 

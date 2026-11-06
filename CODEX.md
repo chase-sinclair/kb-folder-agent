@@ -1,5 +1,10 @@
 # CODEX Handoff Notes
 
+> **Project instructions live in [`CLAUDE.md`](./CLAUDE.md), the single source of
+> truth — read it first.** This file is not an instruction file: it is an
+> append-only handoff log for the Evaluation Center workstream. Do not mirror
+> `CLAUDE.md` content into it.
+
 ## Purpose
 This file tracks implementation details and decisions that matter for developer handoff while Codex is working in the repo. It is intentionally brief and focused on code-level context, not product brainstorming.
 
@@ -27,7 +32,7 @@ Phase 4: Slack integration for Evaluation Center workflows.
 
 ## Repo-Specific Notes
 - `README.md` is UTF-16 encoded in this repo. Avoid casual patching unless there is a good reason to rewrite encoding.
-- `AGENTS.md` is currently untracked in git and should be left alone.
+- `AGENTS.md` is now a pointer to `CLAUDE.md` (it was a stale full copy). Keep it that way; project instructions change in `CLAUDE.md` only.
 
 ## Phase Status
 ### Phase 1
