@@ -37,9 +37,11 @@ kb-folder-agent/
 │   ├── report.py                  # write_json_report(), write_markdown_report()
 │   ├── compare.py                 # Per-run comparison utilities
 │   ├── compare_runs.py            # Cross-run diff reporting
+│   ├── audit_ingestion.py        # Read-only reconciliation: disk vs metadata.db vs Qdrant
 │   ├── run_evals.py               # CLI entry point
 │   ├── test_cases.yaml            # Benchmark test cases
-│   └── test_cases_rerank.yaml     # Separate harder pack with real rerank headroom
+│   ├── test_cases_rerank.yaml     # Separate harder pack with real rerank headroom
+│   └── test_cases_benchmark.yaml  # ConsultingKB pack: 14 positives (P1-P14), 10 negatives (N1-N10)
 ├── integrations/
 │   └── notion.py                  # create_ticket() — Notion Tasks Tracker via REST API
 ├── api/
@@ -61,7 +63,9 @@ kb-folder-agent/
 ├── slack/
 │   └── bot.py                     # /kb slash command handler
 ├── tests/
-│   └── test_reranker.py           # Offline, dependency-free (no pytest): python tests/test_reranker.py
+│   ├── test_reranker.py           # Offline, dependency-free (no pytest): python tests/test_reranker.py
+│   ├── test_quarantine_classify.py # Pins exception -> ErrorType mapping
+│   └── test_not_found_detection.py # Pins refusal detection against real + adversarial answers
 └── storage/
     ├── db.py                      # init_db(), get_db() — aiosqlite async context manager
     └── metadata.db                # Created at runtime — never commit
@@ -72,9 +76,12 @@ kb-folder-agent/
 pip install -r requirements.txt
 python main.py                           # Start watcher + Slack bot
 python main.py connect ~/path/to/folder  # Write WATCHED_FOLDER to .env
-python tests/test_reranker.py            # Offline reranker checks — no network, no API spend
-python -m evals.run_evals --no-rerank --cases-path evals/test_cases_rerank.yaml   # A/B arm A
-python -m evals.run_evals --rerank    --cases-path evals/test_cases_rerank.yaml   # A/B arm B
+python tests/test_reranker.py            # Offline — no network, no API spend
+python tests/test_quarantine_classify.py # Offline
+python tests/test_not_found_detection.py # Offline
+python -m evals.audit_ingestion --source "C:/Users/chase/OneDrive/ConsultingKB" --prefix ConsultingKB
+python -m evals.run_evals --no-rerank --cases-path evals/test_cases_benchmark.yaml   # A/B arm A
+python -m evals.run_evals --rerank    --cases-path evals/test_cases_benchmark.yaml   # A/B arm B
 ```
 
 > On this machine bare `python` resolves to another project venv. Use
@@ -107,6 +114,7 @@ RERANK_CANDIDATE_MULTIPLIER  # Fetch top_k * this before reranking (default: 3)
 RERANK_MAX_CANDIDATES   # Hard cap on the candidate pool (default: 40)
 RERANK_CHUNK_CHARS      # Chars of each chunk shown to the reranker (default: 700)
 RERANK_TIMEOUT_SECONDS  # Per-call rerank timeout before falling back (default: 8)
+SEARCH_OVERFETCH_MULTIPLIER  # Deepen the RRF pool WITHOUT reranking (default: 1 = off)
 NOTION_API_KEY          # Notion integration API key (optional)
 NOTION_DATABASE_ID      # Notion Tasks Tracker database ID (optional)
 ```
@@ -245,7 +253,19 @@ All timestamps: ISO 8601 UTC.
 - `EvalRunConfig.rerank` is **tri-state** (`None` = honour the env, `True`/`False` = force). `run_evaluations()` forces `RERANK_ENABLED`, reads the *effective* value back for the report, and **restores the previous value in a `finally`** — without that, a Slack-triggered `/kb eval rerank` would leave the live bot reranking for the rest of its uptime. `evals/compare.py` reports each arm's rerank state from the run files themselves rather than trusting `--baseline-label`.
 - `tests/test_reranker.py` covers all of the above offline — no network, no Qdrant, no API spend, and no pytest dependency. Run it with `.\.venv\Scripts\python.exe tests	est_reranker.py`.
 
+**V8-2** ✔ ConsultingKB benchmark — the corpus grew from 10 files / 42 chunks to **40 files / 274 chunks** (57 pastperformance, 58 resumes, 54 contracts, 49 costvolume, 56 technicalvolume), built as an adversarial retrieval fixture: near-miss clusters, a named lexical decoy per folder, dated tensions, and three protected TechnicalVolume evidence gaps that must stay open.
+- `evals/test_cases_benchmark.yaml` is a **separate 24-case pack** (14 positives, 10 protected negatives). Every `expected_fact` was verified as a literal substring of its expected source rather than copied from the corpus handoff — five handoff anchors did not survive that check and would have scored 0 as false failures.
+- **`expected_source_hit_rate` cannot see the dominant failure.** It is a *filename set* metric, so a file counts as retrieved when any one of its chunks returns. Three cases scored a perfect 1.00 on it while the answer asserted that figures present in the retrieved file were not stated. **Right file, wrong chunk.** `expected_fact_coverage` is the only metric that catches it; the signature to watch is `hit_rate = 1.00` with `fact_coverage = 0.00`.
+- **`check_not_found_handling()` matched only two literal templates**, so 4 of 6 correct abstentions scored 0.00 and were read as hallucinations — worth 16.6 points. The model refuses with "I don't have information about" and "I cannot fully answer", where the adverb breaks the `cannot answer` substring. Now two regex families layered over the original literals, which are kept verbatim so historical scores cannot shift for any other reason. Pinned by `tests/test_not_found_detection.py`, including adversarial controls: this score is only computed when `expected_not_found` is true, so an over-loose pattern would credit a fabrication that merely mentions an omission.
+- **The rerank gain is ranking, not recall — measured.** Three arms on the 24-case pack against a **±0.8 noise floor** established from two identical baseline runs: rerank-off **91.0%**, `SEARCH_OVERFETCH_MULTIPLIER=3` with rerank off (same 15-candidate pool, no LLM) **90.8%**, rerank-on **95.5%** with the only FAIL eliminated. A deeper pool on its own buys nothing. The one exception is the fan-out case, where the fixed 3-chunks-per-collection budget in `search_all_collections()` was the binding constraint and pool depth alone sufficed.
+- **Reranking is scoped to `question_answering`** (`answer_query`, `answer_with_history`; `top_k=5`, ~9% of a 54-chunk collection). `score` (15), `draft` (20), `gaps` (20) and `compare` (10) pass `rerank=False`: they already retrieve 19-37% of a collection, so reordering barely changes the context. On the re-baselined 8-case pack reranking moved 7 of 8 cases not at all and cost 0.05 on `requirement_scoring`, while adding a Haiku call to each. Measured latency: **+0.8s** at `top_k=5`, **+1.7s** at `top_k=20` where the 40-candidate cap binds. End to end a `/kb ask` is ~5-7s, of which Opus generation is 4-5s — the reranker is not what makes it feel slow.
+- `_SYSTEM_DRAFT` rule 5 now requires an inline source filename, which `_SYSTEM_SCORE` rule 6 and `_SYSTEM_COMPARE` rule 7 already did. `citation_presence` had scored 0.0 in **8 of 8** archived runs back to April, pinning `draft_fedramp_001` at exactly 0.89; it now scores 1.00 and the 8-case pack reaches 100%. Rule 3 also no longer names CPARS ratings, a category the corpus deliberately never contains.
+- `python -m evals.audit_ingestion` is the gate before any benchmark run. It re-chunks the source tree with the real chunker and reconciles it against `metadata.db` and Qdrant, because **agreement between the index and the database proves nothing** — both read a self-consistent 213 chunks while 61 were missing, and nothing reported a problem. Only the source tree is ground truth.
+- **19 baseline chunks fall under 50 words** and are weak-hit generators: one 19-word header holds the only copy of a whitepaper version number and is unreachable by similarity. Instrument them in retrieval tests; do not rewrite them without redesigning the benchmark.
+
 ## Known Fixes
+
+**Qdrant connection failures quarantined healthy files permanently** — On 2026-11-05 the OneDrive watcher ingested 32 of 40 ConsultingKB files and quarantined the other 8 as `CORRUPT_FILE` with the message `ResponseHandlingException: ` and no detail. That is `qdrant_client`'s wrapper for a connection-level failure during the 30-file burst, not a bad file. `classify_exception()` caught `UnexpectedResponse` with a 429/5xx status, `requests` connection errors, `aiohttp` errors and bare `OSError` — but `ResponseHandlingException` is none of those: its MRO is `ApiException -> Exception`, it does **not** subclass `OSError`, and its empty `str()` defeats the `_TRANSIENT_MARKERS` text scan too, so it fell through to the `CORRUPT_FILE` default. `CORRUPT_FILE` is not in `RETRYABLE_ERRORS` and `onedrive_watcher.py` returns early on `is_quarantined()`, so the watcher re-checked those 8 files every 60s and skipped them **forever**. Three of them were the benchmark corpus's primary lexical decoys, so the eval suite would have scored well on exactly the cases built to be hard. Now routed to `TRANSIENT_ERROR`, which gets the existing 3-retry `[30, 120, 600]s` backoff, so a recurrence self-heals instead of needing a manual clear-quarantine. Same class as the transient-Qdrant fix below, which covered the HTTP-status exception but missed the connection-level one. Pinned by `tests/test_quarantine_classify.py`.
 
 **`_ensure_collection` 409 race** — During initial scan, concurrent coroutines for the same collection both pass a check-then-create guard and race to `PUT /collections/{name}`. The second gets a 409 Conflict, quarantining the file as `CORRUPT_FILE`. Fixed in both watchers: dropped the `get_collections()` pre-check entirely; now unconditionally attempts `create_collection` and catches any exception whose string contains `"409"` or `"already exists"` — re-raises all others. This eliminates the TOCTOU window and avoids a fragile `UnexpectedResponse` import path dependency.
 
