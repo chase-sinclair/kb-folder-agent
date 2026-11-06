@@ -5,7 +5,8 @@
 (SHA-256 `c42117177e…92b6b9`), deployed to `C:\Users\chase\OneDrive\ConsultingKB`
 **Pack:** `evals/test_cases_benchmark.yaml` — 14 positives (P1-P14), 10 protected
 negatives (N1-N10), all anchors verified against corpus text
-**Runs:** 2 × rerank-off, 1 × rerank-on, judge off, deterministic metrics only
+**Runs:** 2 × rerank-off, 1 × over-fetch-only, 1 × rerank-on; judge off,
+deterministic metrics only
 
 ---
 
@@ -15,7 +16,8 @@ negatives (N1-N10), all anchors verified against corpus text
 |---|---:|---:|---:|---:|---:|---:|
 | rerank OFF (run 1, rescored) | 18 | 5 | 1 | 91.4% | 86.9% | 77.8% |
 | rerank OFF (run 2) | 18 | 5 | 1 | 90.6% | 86.9% | 77.8% |
-| **rerank ON** | **22** | **2** | **0** | **95.5%** | **89.7%** | **83.3%** |
+| over-fetch only (pool 15, RRF, **no LLM**) | 19 | 4 | 1 | 90.8% | 86.9% | 77.8% |
+| **rerank ON** (pool 15, + LLM) | **22** | **2** | **0** | **95.5%** | **89.7%** | **83.3%** |
 
 Run 1's JSON stores `overall_score = 0.748` because it was scored with the
 abstention detector described in §2.1; 91.4% is the same answers rescored with
@@ -88,14 +90,47 @@ similarity to body prose, so a question about the version cannot reach it.
 
 ---
 
-## 3. What reranking actually fixed
+## 3. Recall or ranking? Ranking, almost entirely
+
+A third arm isolates the two effects. `SEARCH_OVERFETCH_MULTIPLIER=3` with
+rerank **off** fetches the same 15-candidate pool the rerank arm uses and lets
+plain RRF truncate it to 5 — same recall, no LLM. Result: **90.8% against the
+90.6% baseline, a +0.2 move that is inside the ±0.8 noise floor.** A deeper
+candidate pool on its own buys nothing.
+
+The +4.7 from there to the rerank arm is therefore attributable to the LLM
+reordering, not to fetching more.
+
+| Case | OFF (pool 5) | OVF (pool 15, RRF) | ON (pool 15, + LLM) | What fixed it |
+|---|---:|---:|---:|---|
+| P6 FCAIS terms | 0.67 | 0.67 | **1.00** | LLM ranking |
+| P8 bid prices | 0.67 | 0.67 | **0.83** | LLM ranking |
+| P13 throughput | 0.58 | 0.58 | **1.00** | LLM ranking |
+| P10 SOC price + tech | 0.67 | **0.83** | 0.83 | pool depth alone; the LLM added nothing |
+
+**Correction to an earlier claim in this report.** P13 was described here as a
+pure *recall* miss — "the answer-bearing chunk was never fetched, so no
+reordering of 5 chunks could have reached it." The over-fetch arm disproves
+that: at a pool of 15 the chunk *was* fetched and RRF still placed
+`TransitionPlan_Phase_In_Standard.md` below rank 5. P13 is a ranking failure
+like P6 and P8, and the recall/ranking distinction drawn below was wrong for
+three of the four cases.
+
+P10 is the exception that holds up, and it is the fan-out case: raising the
+per-collection budget from 3 to 9 is what surfaced the pricing body chunk, and
+reranking that wider pool changed nothing further. The fixed
+3-chunks-per-collection split in `search_all_collections()` was the binding
+constraint, exactly as the handoff predicted — and it can be fixed without an
+LLM in the path.
+
+## 4. What reranking actually fixed
 
 Four cases were stable across both off-arm runs and moved under rerank. All four
 are the right-file-wrong-chunk failure:
 
 | Case | OFF (×2 stable) | ON | `expected_fact_coverage` | What changed |
 |---|---:|---:|---|---|
-| P13 throughput | 0.58 **FAIL** | 1.00 PASS | 0.50 → 1.00 | `TransitionPlan_Phase_In_Standard.md` was never retrieved at top-5; the 15-candidate pool reached it |
+| P13 throughput | 0.58 **FAIL** | 1.00 PASS | 0.50 → 1.00 | `TransitionPlan_Phase_In_Standard.md` was fetched but ranked below 5 by RRF; the reranker promoted it (see §3) |
 | P6 FCAIS terms | 0.67 WARN | 1.00 PASS | **0.00 → 1.00** | the ceiling / CO / rate-table chunk surfaced |
 | P8 bid prices | 0.67 WARN | 0.83 PASS | **0.00 → 0.50** | one of the two pricing bodies surfaced |
 | P10 SOC price + tech | 0.67 WARN | 0.83 PASS | **0.00 → 0.50** | the pricing **body** chunk surfaced, not just the header |
@@ -104,12 +139,15 @@ P10 is the case the handoff flagged as unresolved. Verified chunk map:
 `PricingStrategy_Notes.md` chunk 1 is a 27-word header with no dollar figures,
 and the win-price target lives in chunk 2. Off-arm, fan-out's three CostVolume
 slots returned the cost-realism decoy, the SOC BOE and the header — perfect
-`hit_rate`, zero usable price evidence. On-arm, the body chunk entered.
+`hit_rate`, zero usable price evidence. Widening the per-collection budget from
+3 to 9 is what let the body chunk in; the rerank arm scores it identically.
 
-**The mechanism is the candidate pool as much as the model.** With rerank on,
-`search()` fetches `min(top_k × 3, 40)` = 15 candidates and reorders them;
-off, it fetches exactly 5. P13 was a pure *recall* miss — no reordering of 5
-chunks could have fixed it.
+**The mechanism is the model, not the pool** — §3 measures this directly. With
+rerank on, `search()` fetches `min(top_k × 3, 40)` = 15 candidates and reorders
+them; off, it fetches exactly 5. But fetching 15 and letting RRF truncate scores
+the same as fetching 5, so what changes the outcome is the reordering. The one
+exception is P10, where the fan-out budget was the binding constraint and pool
+depth alone was sufficient.
 
 Note P10's MRR stayed at 0.14 while its fact coverage doubled. That is expected,
 not a contradiction: `answer_query_all_eval` builds `flat_sources`
@@ -119,7 +157,7 @@ single-collection cases carry the honest ranking signal.
 
 ---
 
-## 4. Protected gaps and abstention
+## 5. Protected gaps and abstention
 
 All 10 negatives pass in both arms once the detector is fixed. Specifically
 verified:
@@ -141,11 +179,15 @@ refusal on N6-N8 is a pass, not a miss.
 
 ---
 
-## 5. Honest limitations
+## 6. Honest limitations
 
-- **One rerank-on run.** The off arm has two; the on arm has one. The +4.5
-  aggregate exceeds the measured ±0.8 noise, and the four driving cases were
-  stable off-arm, but a second on-arm run would tighten this.
+- **One rerank-on run and one over-fetch run.** The off arm has two. The +4.7
+  aggregate exceeds the measured ±0.8 noise, and the driving cases were stable
+  off-arm, but a second run of each would tighten this.
+- **An earlier version of this report attributed P13 to recall.** The over-fetch
+  arm disproved it. The claim was made before the arm that could test it had
+  run, which is the mistake worth remembering: the recall/ranking split was
+  inferable from the code but not measurable from the two arms in hand.
 - **P4 is unresolved, not a regression.** Under rerank its `hit_rate` fell
   1.00 → 0.67 (one of three migration documents dropped out), which suggests
   reranking 15 candidates down to 5 can favour depth over *breadth* on a
@@ -164,16 +206,21 @@ refusal on N6-N8 is a pass, not a miss.
 
 ---
 
-## 6. Recommendations, ranked by measured failure
+## 7. Recommendations, ranked by measured failure
 
-1. **Decouple the candidate pool from reranking.** P13's failure was recall, not
-   ranking: the right chunk was never fetched. Over-fetching is cheap (one Qdrant
-   query at a larger limit) while the rerank LLM call is not. Consider raising
-   `fetch_k` even on the off path, so the two effects can be measured separately.
-2. **Give `search_all_collections` a dynamic per-collection budget.** The fixed
-   3-chunks-per-collection split is what starved P10. A query naming price *and*
-   technical differentiators deserves more than three slots in the two
-   collections that hold the answer.
+1. **Turn the reranker on.** This is now measured rather than assumed: the
+   over-fetch arm shows the candidate pool contributes +0.2 (noise) and the LLM
+   reordering contributes +4.7, eliminating the only FAIL. At roughly $0.001 per
+   query against the Opus call it precedes, the cost case is not close. The price
+   is latency, +0.4-1.0s on `ask` and more on `draft`/`gaps` at the 40-candidate
+   cap, with no progress stream to mask it.
+2. **Widen the fan-out budget in `search_all_collections` regardless.** P10
+   improved on pool depth alone, with no LLM involved, so this is a free fix
+   independent of recommendation 1. The fixed 3-chunks-per-collection split is
+   what starved it: a query naming price *and* technical differentiators deserves
+   more than three slots in the two collections that hold the answer.
+   `SEARCH_OVERFETCH_MULTIPLIER` is **not** worth enabling for single-collection
+   search — there it bought nothing.
 3. **Instrument the 19 short baseline chunks** rather than rewriting them. They
    are weak-hit generators, and P14 shows a sub-20-word header can hold the only
    copy of a fact while being unreachable by similarity. Not a corpus defect —
