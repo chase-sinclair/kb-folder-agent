@@ -166,11 +166,22 @@ async def _prune_stale_points(client, collection_name: str, file_path: str, chun
     legacy points written under the old per-process hash() IDs, which carry no
     chunk_index, and trailing points left behind when a file shrinks.
     """
-    from qdrant_client.models import FieldCondition, Filter, IsEmpty, MatchValue, PayloadField, Range
+    # IsEmptyCondition, not IsEmpty: qdrant_client has never exported the latter,
+    # and because this import sits outside the try below, the ImportError used to
+    # escape to ingest_file's handler and quarantine the file as CORRUPT_FILE --
+    # i.e. every local-backend ingest failed. Unnoticed because BACKEND=onedrive.
+    from qdrant_client.models import (
+        FieldCondition,
+        Filter,
+        IsEmptyCondition,
+        MatchValue,
+        PayloadField,
+        Range,
+    )
 
     same_file = FieldCondition(key="file_path", match=MatchValue(value=file_path))
     for extra in (
-        IsEmpty(is_empty=PayloadField(key="chunk_index")),
+        IsEmptyCondition(is_empty=PayloadField(key="chunk_index")),
         FieldCondition(key="chunk_index", range=Range(gte=chunk_count)),
     ):
         try:
@@ -191,6 +202,31 @@ async def _delete_file_from_qdrant(client, collection_name: str, file_path: str)
             must=[FieldCondition(key="file_path", match=MatchValue(value=file_path))]
         ),
     )
+
+
+async def _prune_stale_chunk_rows(db, file_path: str, chunk_count: int) -> int:
+    """Drop metadata rows for trailing chunks a shrunken file no longer has.
+
+    This is the SQLite counterpart to _prune_stale_points. Without it a file
+    that shrinks leaves orphaned `chunks` rows that no later re-ingest can
+    remove, because ingestion only ever upserts indices 0..len(chunks)-1 and so
+    never revisits a higher index. The divergence is silent: Qdrant ends up
+    correct while metadata.db over-reports, and only evals.audit_ingestion
+    notices.
+
+    `chunk_count` must be the FULL current chunk count, never
+    len(changed_chunks) -- the local watcher re-embeds incrementally, so the
+    changed subset says nothing about which indices still exist, and using it
+    would delete live rows.
+
+    Runs inside the caller's transaction so pruning and upserting commit
+    together.
+    """
+    cursor = await db.execute(
+        "DELETE FROM chunks WHERE file_path = ? AND chunk_index >= ?",
+        (file_path, chunk_count),
+    )
+    return cursor.rowcount or 0
 
 
 # ---------------------------------------------------------------------------
@@ -263,12 +299,26 @@ async def ingest_file(file_path: str) -> None:
             ).hexdigest()
         ]
 
-        if not changed_chunks:
+        # A file can shrink while every surviving chunk stays byte-identical --
+        # delete a trailing section and chunks 0..n-1 are unchanged. That yields
+        # no changed_chunks but still leaves trailing entries in Qdrant and in
+        # `chunks`. Returning here would orphan them permanently, since
+        # ingestion only ever upserts indices 0..len(chunks)-1.
+        has_stale_tail = any(index >= len(chunks) for index in stored_by_index)
+
+        if not changed_chunks and not has_stale_tail:
             log.debug("ingest_file: no changed chunks for %s", file_path)
             return
 
-        log.debug("ingest_file: embedding %d chunk(s) for collection=%s", len(changed_chunks), collection_name)
-        embedded = await embed_chunks(changed_chunks)
+        if changed_chunks:
+            log.debug("ingest_file: embedding %d chunk(s) for collection=%s", len(changed_chunks), collection_name)
+            embedded = await embed_chunks(changed_chunks)
+        else:
+            log.info(
+                "ingest_file: %s shrank to %d chunk(s) with no content change; pruning only",
+                file_path, len(chunks),
+            )
+            embedded = []
 
         log.debug("ingest_file: ensuring collection %r for %s", collection_name, file_path)
         from mcp_servers.vectordb_server import SPARSE_VECTOR_NAME, build_sparse_vector, point_id
@@ -294,7 +344,8 @@ async def ingest_file(file_path: str) -> None:
                 )
                 for item in embedded
             ]
-            await client.upsert(collection_name=collection_name, points=points)
+            if points:
+                await client.upsert(collection_name=collection_name, points=points)
         finally:
             await client.close()
 
@@ -316,7 +367,10 @@ async def ingest_file(file_path: str) -> None:
                         chunk.chunk_type, now, source_folder, collection_name,
                     ),
                 )
+            pruned = await _prune_stale_chunk_rows(db, file_path, len(chunks))
             await db.commit()
+        if pruned:
+            log.info("ingest_file: pruned %d stale chunk row(s) for %s", pruned, file_path)
 
         log.info("Ingested %d changed chunk(s) from %s", len(changed_chunks), file_path)
 

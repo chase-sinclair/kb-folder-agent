@@ -153,6 +153,25 @@ async def _ensure_collection(client, collection_name: str) -> None:
             raise
 
 
+async def _prune_stale_chunk_rows(db, file_path: str, chunk_count: int) -> int:
+    """Drop metadata rows for trailing chunks a shrunken file no longer has.
+
+    Qdrant is already correct on this path because _delete_file_from_qdrant
+    wipes the file's points before the re-upsert, but nothing removed the
+    equivalent `chunks` rows, so metadata.db over-reported while the index was
+    right. The divergence is silent and only evals.audit_ingestion notices it.
+
+    `chunk_count` must be the FULL current chunk count. Mirrors
+    ingestion/watcher.py; kept per-watcher like _ensure_collection and
+    _delete_file_from_qdrant. Runs inside the caller's transaction.
+    """
+    cursor = await db.execute(
+        "DELETE FROM chunks WHERE file_path = ? AND chunk_index >= ?",
+        (file_path, chunk_count),
+    )
+    return cursor.rowcount or 0
+
+
 async def _delete_file_from_qdrant(client, collection_name: str, file_path: str) -> None:
     from qdrant_client.models import FieldCondition, Filter, MatchValue
 
@@ -300,8 +319,13 @@ async def ingest_onedrive_file(file_path: str, folder_name: str) -> None:
                         chunk.chunk_type, now, folder_name, collection_name,
                     ),
                 )
+            pruned = await _prune_stale_chunk_rows(db, file_path, len(chunks))
             await db.commit()
 
+        if pruned:
+            log.info(
+                "Pruned %d stale chunk row(s) for OneDrive:%s", pruned, file_path
+            )
         log.info("Ingested %d chunk(s) from OneDrive:%s", len(chunks), file_path)
 
     except PermissionError as exc:
