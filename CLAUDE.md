@@ -43,7 +43,7 @@ kb-folder-agent/
 │   ├── test_cases_rerank.yaml     # Separate harder pack with real rerank headroom
 │   └── test_cases_benchmark.yaml  # ConsultingKB pack: 14 positives (P1-P14), 10 negatives (N1-N10)
 ├── integrations/
-│   └── notion.py                  # create_ticket() — Notion Tasks Tracker via REST API
+│   └── notion.py                  # create_ticket(), list_assignable_users(), build_page_payload()
 ├── api/
 │   ├── main.py                    # FastAPI app — CORS, router mounts for /collections and /query
 │   └── routers/
@@ -174,7 +174,7 @@ All timestamps: ISO 8601 UTC.
 | `/kb agent <question>` | Multi-step agentic query with live tool-use reasoning posted to channel |
 | `/kb eval [all\|case <id>\|task-type <type>\|collection <folder>] [judge] [rerank\|no-rerank]` | Run evaluation suite against KB benchmark |
 | `/kb eval-report` | Show the latest saved evaluation summary |
-| `/kb ticket "<task name>" [high\|medium\|low] [YYYY-MM-DD]` | Create a Notion ticket in the Tasks Tracker database |
+| `/kb ticket "<task name>" [high\|medium\|low] [YYYY-MM-DD]` | Opens a Slack modal to review/assign, then creates the Notion ticket on submit |
 
 ## Rules
 - **NEVER modify or output `.env`**
@@ -224,7 +224,14 @@ All timestamps: ISO 8601 UTC.
 ## V5 Phases
 
 **V5-1** ✔ Evaluation Center — `evals/` package with YAML-driven benchmark suite, retrieval quality / fact coverage / format compliance metrics, optional LLM judge (`use_judge=True`), JSON + Markdown report output, and cross-run comparison. `/kb eval` runs the suite in the background and posts an ephemeral summary; `/kb eval-report` shows the latest saved results. `run_evaluations()` in `evals/runner.py`; `_handle_eval()` / `_handle_eval_report()` in `slack/bot.py`. Eval scope filters: `all`, `case <id>`, `task-type <type>`, `collection <folder>`.
-**V5-2** ✔ Notion integration — `integrations/notion.py` wraps the Notion REST API to create pages in a Tasks Tracker database. `/kb ticket "<task name>" [high|medium|low] [YYYY-MM-DD]` creates a ticket and returns the Notion page URL. Also works from threads (prefix message with `ticket …`). Requires `NOTION_API_KEY` and `NOTION_DATABASE_ID`.
+**V5-2** ✔ Notion integration — `integrations/notion.py` wraps the Notion REST API to create pages in a Tasks Tracker database. Requires `NOTION_API_KEY` and `NOTION_DATABASE_ID`.
+
+**V5-3** ✔ Interactive ticket creation — `/kb ticket` no longer writes to Notion on invocation. It parses the arguments, then opens a **Slack modal** (`views_open` on the slash command's `trigger_id`) prefilled with task name, priority and due date, plus an optional assignee and a multiline notes field. Notion is called **only** on view submission (`@app.view("kb_ticket_submit")`); Cancel creates nothing.
+- **Parsing.** `parse_ticket_args()` is a pure function returning `(task_name, priority, due_date, error)`. `_normalize_quotes()` folds curly quotes (U+201C/D, U+2018/9, guillemets) to ASCII **before** parsing and is applied in `_parse_command()` too, so every quoted subcommand benefits. Unquoted input still works and now also honours trailing priority/date tokens. Unterminated quotes and unrecognised trailing tokens return a validation error instead of creating a malformed ticket.
+- **Assignee.** `list_assignable_users()` reads `GET /v1/users` and offers a real selector of Notion people, whose UUID populates the `Assignee` **people** property. Slack and Notion user IDs are unrelated and are never mapped to each other. If user listing is unavailable the modal degrades to a free-text "Requested owner (not a Notion assignment)" field written to the page body and labelled as such — it never guesses an identity.
+- **Notes** go into the page body under an `Additional Notes` heading (`heading_2` + paragraphs), split at Notion's 2000-char rich-text cap.
+- **One creation path.** `create_ticket_from_submission()` is the only caller of `create_ticket()`. The thread route (`ticket …` in a thread reply) posts a button that opens the same modal, so it cannot bypass review. **No retry on failure** — a create is not idempotent, and retrying an ambiguous failure is how duplicate tickets happen.
+- Modal interactions require **Interactivity enabled** in the Slack app (automatic under Socket Mode). Pinned by `tests/test_ticket_parsing.py` (75 offline checks, no network).
 
 ## V6 Phases
 
@@ -264,6 +271,8 @@ All timestamps: ISO 8601 UTC.
 - **19 baseline chunks fall under 50 words** and are weak-hit generators: one 19-word header holds the only copy of a whitepaper version number and is unreachable by similarity. Instrument them in retrieval tests; do not rewrite them without redesigning the benchmark.
 
 ## Known Fixes
+
+**`/kb ticket` swallowed its own arguments** — Slack clients autocorrect straight quotes to typographic ones, and `_handle_ticket()` matched only `["']`. A curly-quoted title fell through to the "treat the whole string as the name" fallback, so the Notion task name contained the quote marks *and* the trailing `high 2026-11-20`, priority silently defaulted to `Medium`, and the due date was dropped. Confirmed against a real Notion task created on 2026-11-09. Fixed by normalising quotes before parsing; pinned with both quote styles including the exact failing command.
 
 **Qdrant connection failures quarantined healthy files permanently** — On 2026-11-05 the OneDrive watcher ingested 32 of 40 ConsultingKB files and quarantined the other 8 as `CORRUPT_FILE` with the message `ResponseHandlingException: ` and no detail. That is `qdrant_client`'s wrapper for a connection-level failure during the 30-file burst, not a bad file. `classify_exception()` caught `UnexpectedResponse` with a 429/5xx status, `requests` connection errors, `aiohttp` errors and bare `OSError` — but `ResponseHandlingException` is none of those: its MRO is `ApiException -> Exception`, it does **not** subclass `OSError`, and its empty `str()` defeats the `_TRANSIENT_MARKERS` text scan too, so it fell through to the `CORRUPT_FILE` default. `CORRUPT_FILE` is not in `RETRYABLE_ERRORS` and `onedrive_watcher.py` returns early on `is_quarantined()`, so the watcher re-checked those 8 files every 60s and skipped them **forever**. Three of them were the benchmark corpus's primary lexical decoys, so the eval suite would have scored well on exactly the cases built to be hard. Now routed to `TRANSIENT_ERROR`, which gets the existing 3-retry `[30, 120, 600]s` backoff, so a recurrence self-heals instead of needing a manual clear-quarantine. Same class as the transient-Qdrant fix below, which covered the HTTP-status exception but missed the connection-level one. Pinned by `tests/test_quarantine_classify.py`.
 

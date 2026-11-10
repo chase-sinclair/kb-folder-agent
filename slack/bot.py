@@ -20,7 +20,7 @@ from agent.orchestrator import (
 from agent import orchestrator as _orch
 from agent.agent_loop import run_agent
 from agent.rag import answer_query, answer_query_all, answer_with_history, compare_collections, draft_section, find_gaps, score_requirement, summarize_diff, summarize_recent_changes
-from integrations.notion import create_ticket
+from integrations.notion import create_ticket, list_assignable_users
 from evals.config import REPORTS_DIR, RESULTS_DIR
 from evals.report import write_json_report, write_markdown_report
 from evals.runner import run_evaluations
@@ -85,9 +85,28 @@ def clean_for_slack(text: str) -> str:
     return text.strip()
 
 
+_QUOTE_CHARS = "\"'“”‘’«»"
+_SMART_QUOTE_MAP = str.maketrans({
+    "“": '"', "”": '"',   # curly double quotes
+    "‘": "'", "’": "'",   # curly single quotes
+    "«": '"', "»": '"',   # guillemets
+})
+
+
+def _normalize_quotes(text: str) -> str:
+    """Fold typographic quotes to straight ASCII quotes.
+
+    Slack clients (iOS/macOS autocorrect in particular) substitute curly quotes as
+    you type, so a command that looks correct on screen arrives with U+201C/U+201D.
+    Every quote-aware parser here normalises first, otherwise a quoted argument
+    silently falls through to a whole-string fallback.
+    """
+    return (text or "").translate(_SMART_QUOTE_MAP)
+
+
 def _parse_command(text: str) -> tuple[str, str, str]:
     """Returns (subcommand, folder_name, query). All fields may be empty strings."""
-    text = (text or "").strip()
+    text = _normalize_quotes(text or "").strip()
     if not text:
         return "", "", ""
 
@@ -862,7 +881,10 @@ async def handle_thread_reply(event, client):
         # Ticket creation from thread: "ticket <name> [priority] [date]"
         if re.match(r"^ticket\b", user_text, re.IGNORECASE):
             rest = user_text[len("ticket"):].strip()
-            fallback, blocks = await _handle_ticket(rest)
+            task_name, _p, _d, error = parse_ticket_args(rest)
+            fallback, blocks = (
+                _error_blocks(error) if error else _ticket_prompt_blocks(rest)
+            )
             await _safe_post(
                 client.chat_postMessage,
                 fallback,
@@ -896,45 +918,278 @@ async def handle_thread_reply(event, client):
 # Notion ticket
 # ---------------------------------------------------------------------------
 
-async def _handle_ticket(rest: str) -> tuple[str, list]:
-    usage = 'Usage: `/kb ticket "<task name>" [high|medium|low] [YYYY-MM-DD]`'
-    rest = rest.strip()
-    if not rest:
-        return _error_blocks(usage)
+TICKET_USAGE = 'Usage: `/kb ticket "<task name>" [high|medium|low] [YYYY-MM-DD]`'
+_PRIORITIES = ("High", "Medium", "Low")
+_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
-    match = re.match(r'^["\'](.+?)["\'](.*)$', rest)
-    if match:
-        task_name = match.group(1).strip()
-        extra = match.group(2).strip()
+
+def parse_ticket_args(rest: str) -> tuple[str | None, str, str | None, str | None]:
+    """Parse `"<task name>" [priority] [YYYY-MM-DD]` into its parts.
+
+    Returns (task_name, priority, due_date, error). `error` is None on success and
+    task_name is None on failure, so a malformed command reports a problem instead of
+    creating a ticket whose title has swallowed its own arguments.
+
+    Quotes are normalised first: the original implementation matched only ASCII
+    quotes, so a curly-quoted title fell through to "treat the whole string as the
+    name", producing a title containing the quote marks and the trailing
+    `high 2026-11-20`, with priority silently defaulting to Medium.
+    """
+    rest = _normalize_quotes(rest or "").strip()
+    if not rest:
+        return None, "Medium", None, TICKET_USAGE
+
+    if rest[0] in _QUOTE_CHARS:
+        quote = rest[0]
+        closing = rest.find(quote, 1)
+        if closing == -1:
+            return None, "Medium", None, (
+                f"Missing the closing `{quote}` around the task name.\n{TICKET_USAGE}"
+            )
+        task_name = rest[1:closing].strip()
+        extra = rest[closing + 1:].strip()
     else:
-        # No quotes — treat entire string as task name
-        task_name = rest
-        extra = ""
+        # Unquoted: the trailing priority/date tokens are still honoured, which is
+        # what someone typing `/kb ticket Fix the thing high 2026-11-20` means.
+        tokens = rest.split()
+        tail: list[str] = []
+        while tokens and (
+            tokens[-1].lower() in {p.lower() for p in _PRIORITIES}
+            or _DATE_RE.match(tokens[-1])
+        ):
+            tail.insert(0, tokens.pop())
+        task_name = " ".join(tokens).strip()
+        extra = " ".join(tail)
 
     if not task_name:
-        return _error_blocks(usage)
+        return None, "Medium", None, TICKET_USAGE
 
     priority = "Medium"
     due_date: str | None = None
+    unknown: list[str] = []
     for token in extra.split():
-        if token.lower() in {"high", "medium", "low"}:
+        low = token.lower()
+        if low in {p.lower() for p in _PRIORITIES}:
             priority = token.capitalize()
-        elif re.match(r"^\d{4}-\d{2}-\d{2}$", token):
+        elif _DATE_RE.match(token):
             due_date = token
+        else:
+            unknown.append(token)
 
-    try:
-        url = await create_ticket(task_name, priority, due_date)
-    except Exception as exc:
-        log.error("Notion ticket creation failed: %s", exc)
-        return _error_blocks(f"❌ Failed to create ticket: {exc}")
+    if unknown:
+        return None, "Medium", None, (
+            "Didn't understand: " + ", ".join(f"`{u}`" for u in unknown)
+            + f"\n{TICKET_USAGE}"
+        )
+    return task_name, priority, due_date, None
 
-    msg = f"✅ *{task_name}* created (Priority: {priority})"
-    if due_date:
-        msg += f", due {due_date}"
+
+# ---------------------------------------------------------------------------
+# Ticket modal
+# ---------------------------------------------------------------------------
+
+TICKET_CALLBACK_ID = "kb_ticket_submit"
+TICKET_OPEN_ACTION_ID = "kb_open_ticket_modal"
+_UNASSIGNED_VALUE = "__unassigned__"
+
+
+def _ticket_modal_view(
+    task_name: str,
+    priority: str,
+    due_date: str | None,
+    notion_users: list[dict],
+    private_metadata: str,
+) -> dict:
+    """Build the review-before-create modal. Prefilled from the command, editable."""
+    blocks: list[dict] = [
+        {
+            "type": "input",
+            "block_id": "task_name",
+            "label": {"type": "plain_text", "text": "Task name"},
+            "element": {
+                "type": "plain_text_input",
+                "action_id": "value",
+                "initial_value": task_name,
+            },
+        },
+        {
+            "type": "input",
+            "block_id": "priority",
+            "label": {"type": "plain_text", "text": "Priority"},
+            "element": {
+                "type": "static_select",
+                "action_id": "value",
+                "initial_option": {
+                    "text": {"type": "plain_text", "text": priority},
+                    "value": priority,
+                },
+                "options": [
+                    {"text": {"type": "plain_text", "text": p}, "value": p}
+                    for p in _PRIORITIES
+                ],
+            },
+        },
+        {
+            "type": "input",
+            "block_id": "due_date",
+            "optional": True,
+            "label": {"type": "plain_text", "text": "Due date"},
+            "element": (
+                {"type": "datepicker", "action_id": "value", "initial_date": due_date}
+                if due_date else
+                {"type": "datepicker", "action_id": "value"}
+            ),
+        },
+    ]
+
+    if notion_users:
+        blocks.append({
+            "type": "input",
+            "block_id": "assignee",
+            "optional": True,
+            "label": {"type": "plain_text", "text": "Assignee"},
+            "element": {
+                "type": "static_select",
+                "action_id": "value",
+                "placeholder": {"type": "plain_text", "text": "Unassigned"},
+                "options": [
+                    {
+                        "text": {"type": "plain_text", "text": u["name"][:75]},
+                        "value": u["id"],
+                    }
+                    for u in notion_users[:100]
+                ],
+            },
+        })
+    else:
+        # The integration cannot list Notion users, so a real assignment is not
+        # possible. Offer free text and say plainly that it is not an assignment --
+        # never guess a Notion identity from a Slack one.
+        blocks.append({
+            "type": "input",
+            "block_id": "requested_owner",
+            "optional": True,
+            "label": {"type": "plain_text", "text": "Requested owner (not a Notion assignment)"},
+            "element": {"type": "plain_text_input", "action_id": "value"},
+            "hint": {
+                "type": "plain_text",
+                "text": "Notion user list unavailable, so this is recorded as text in the page body.",
+            },
+        })
+
+    blocks.append({
+        "type": "input",
+        "block_id": "notes",
+        "optional": True,
+        "label": {"type": "plain_text", "text": "Additional notes"},
+        "element": {
+            "type": "plain_text_input",
+            "action_id": "value",
+            "multiline": True,
+            "placeholder": {"type": "plain_text", "text": "Optional context for whoever picks this up"},
+        },
+    })
+
+    return {
+        "type": "modal",
+        "callback_id": TICKET_CALLBACK_ID,
+        "private_metadata": private_metadata,
+        "title": {"type": "plain_text", "text": "Create Ticket"},
+        "submit": {"type": "plain_text", "text": "Create Ticket"},
+        "close": {"type": "plain_text", "text": "Cancel"},
+        "blocks": blocks,
+    }
+
+
+def extract_ticket_submission(view: dict) -> dict:
+    """Pull the submitted field values out of a Slack view payload."""
+    state = ((view or {}).get("state") or {}).get("values") or {}
+
+    def val(block: str, key: str = "value"):
+        return ((state.get(block) or {}).get(key)) or {}
+
+    selected = val("assignee").get("selected_option") or {}
+    assignee_id = selected.get("value") or None
+    if assignee_id == _UNASSIGNED_VALUE:
+        assignee_id = None
+
+    priority_opt = val("priority").get("selected_option") or {}
+    return {
+        "task_name": (val("task_name").get("value") or "").strip(),
+        "priority": priority_opt.get("value") or "Medium",
+        "due_date": val("due_date").get("selected_date") or None,
+        "assignee_id": assignee_id,
+        "assignee_name": (selected.get("text") or {}).get("text") or None,
+        "requested_owner": (val("requested_owner").get("value") or "").strip() or None,
+        "notes": (val("notes").get("value") or "").strip() or None,
+    }
+
+
+def _ticket_success_blocks(fields: dict, url: str) -> tuple[str, list]:
+    msg = f"✅ *{fields['task_name']}* created (Priority: {fields['priority']})"
+    if fields.get("due_date"):
+        msg += f", due {fields['due_date']}"
+    if fields.get("assignee_name"):
+        msg += f"\nAssigned to *{fields['assignee_name']}* in Notion"
+    elif fields.get("requested_owner"):
+        msg += f"\nRequested owner: *{fields['requested_owner']}* (recorded as text, not a Notion assignment)"
+    else:
+        msg += "\nUnassigned"
+    if fields.get("notes"):
+        msg += "\n_Additional notes saved to the page body._"
+
     blocks = [_header("🎫 Ticket Created"), _divider(), _section(msg)]
     if url:
         blocks.append(_context(f"<{url}|Open in Notion>"))
     return msg, blocks
+
+
+async def create_ticket_from_submission(fields: dict) -> tuple[str, list]:
+    """The single Notion-creating path. Both the slash command and the thread route
+    reach Notion only through here, via the modal, so creation logic is not
+    duplicated and nothing can bypass the review step."""
+    url = await create_ticket(
+        fields["task_name"],
+        fields["priority"],
+        fields.get("due_date"),
+        assignee_id=fields.get("assignee_id"),
+        notes=fields.get("notes"),
+        requested_owner=fields.get("requested_owner"),
+    )
+    return _ticket_success_blocks(fields, url)
+
+
+def _ticket_prompt_blocks(rest: str) -> tuple[str, list]:
+    """Thread route: offer a button that opens the same modal, rather than creating
+    a ticket immediately and bypassing review."""
+    msg = "Open the ticket form to review and assign before creating."
+    return msg, [
+        _header("🎫 Create Ticket"),
+        _divider(),
+        _section(msg),
+        {
+            "type": "actions",
+            "elements": [{
+                "type": "button",
+                "action_id": TICKET_OPEN_ACTION_ID,
+                "style": "primary",
+                "text": {"type": "plain_text", "text": "Open ticket form"},
+                "value": (rest or "")[:1900],
+            }],
+        },
+    ]
+
+
+async def _open_ticket_modal(client, trigger_id: str, rest: str, channel_id: str, user_id: str) -> None:
+    task_name, priority, due_date, error = parse_ticket_args(rest)
+    if error:
+        raise ValueError(error)
+    users = await list_assignable_users()
+    metadata = json.dumps({"channel_id": channel_id, "user_id": user_id})
+    await client.views_open(
+        trigger_id=trigger_id,
+        view=_ticket_modal_view(task_name, priority, due_date, users, metadata),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -996,7 +1251,7 @@ async def _handle_agent_in_channel(question: str, say, respond) -> None:
 # ---------------------------------------------------------------------------
 
 @app.command("/kb")
-async def handle_kb(ack, respond, say, command):
+async def handle_kb(ack, respond, say, command, client):
     await ack()
 
     text = command.get("text", "")
@@ -1009,7 +1264,18 @@ async def handle_kb(ack, respond, say, command):
             await _handle_agent_in_channel(query, say, respond)
             return
         elif subcommand == "ticket":
-            fallback, blocks = await _handle_ticket(query)
+            # Opens a review modal; nothing is created until the user submits it.
+            try:
+                await _open_ticket_modal(
+                    client,
+                    command.get("trigger_id", ""),
+                    query,
+                    channel_id,
+                    user_id,
+                )
+                return
+            except ValueError as exc:
+                fallback, blocks = _error_blocks(str(exc))
         elif subcommand == "list":
             fallback, blocks = await _handle_list()
         elif subcommand == "ask":
@@ -1060,6 +1326,89 @@ async def handle_kb(ack, respond, say, command):
             log.error("say() failed for /kb ask: %s", exc)
 
     await _safe_post(respond, fallback, blocks)
+
+
+# ---------------------------------------------------------------------------
+# Ticket modal interactions
+# ---------------------------------------------------------------------------
+
+@app.action(TICKET_OPEN_ACTION_ID)
+async def handle_open_ticket_modal(ack, body, client):
+    """Thread route: the button opens the same modal the slash command does."""
+    await ack()
+    rest = ""
+    for action in (body.get("actions") or []):
+        if action.get("action_id") == TICKET_OPEN_ACTION_ID:
+            rest = action.get("value") or ""
+    channel_id = (body.get("channel") or {}).get("id", "")
+    user_id = (body.get("user") or {}).get("id", "")
+    try:
+        await _open_ticket_modal(
+            client, body.get("trigger_id", ""), rest, channel_id, user_id
+        )
+    except Exception as exc:
+        log.error("Could not open ticket modal: %s", exc, exc_info=exc)
+        if channel_id:
+            await client.chat_postMessage(
+                channel=channel_id, text=f"❌ Could not open the ticket form: {exc}"
+            )
+
+
+@app.view(TICKET_CALLBACK_ID)
+async def handle_ticket_submission(ack, body, client, view):
+    """Create the Notion page only after the user submits the modal.
+
+    Validation errors are returned through ack(response_action="errors") so the modal
+    stays open with the field flagged. Once validation passes the modal is closed,
+    then Notion is called -- the success message is posted only after the API
+    confirms, and a failure is reported without any retry, since a create is not
+    idempotent.
+    """
+    fields = extract_ticket_submission(view)
+
+    if not fields["task_name"]:
+        await ack(response_action="errors", errors={"task_name": "A task name is required."})
+        return
+    if fields["priority"] not in _PRIORITIES:
+        await ack(response_action="errors", errors={"priority": "Choose High, Medium or Low."})
+        return
+    if fields.get("due_date") and not _DATE_RE.match(fields["due_date"]):
+        await ack(response_action="errors", errors={"due_date": "Use YYYY-MM-DD."})
+        return
+
+    await ack()
+
+    try:
+        meta = json.loads(view.get("private_metadata") or "{}")
+    except (ValueError, TypeError):
+        meta = {}
+    channel_id = meta.get("channel_id") or ""
+    user_id = meta.get("user_id") or (body.get("user") or {}).get("id", "")
+
+    try:
+        fallback, blocks = await create_ticket_from_submission(fields)
+    except Exception as exc:
+        log.error("Notion ticket creation failed: %s", exc, exc_info=exc)
+        fallback, blocks = _error_blocks(f"❌ Failed to create ticket: {exc}")
+
+    if not channel_id:
+        log.warning("No channel in private_metadata; ticket result not posted")
+        return
+    try:
+        await client.chat_postMessage(
+            channel=channel_id, text=fallback, blocks=_cap_blocks(blocks)
+        )
+    except Exception as exc:
+        # The channel may not include the bot; fall back to a DM so the result and
+        # its Notion link are never lost after a successful create.
+        log.warning("chat_postMessage failed (%s); trying DM", exc)
+        if user_id:
+            try:
+                await client.chat_postMessage(
+                    channel=user_id, text=fallback, blocks=_cap_blocks(blocks)
+                )
+            except Exception as exc2:
+                log.error("Could not deliver ticket confirmation: %s", exc2)
 
 
 # ---------------------------------------------------------------------------

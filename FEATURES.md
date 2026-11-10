@@ -55,7 +55,7 @@ Folder names map to collection names via
 | `/kb clear-quarantine-all` | Release every quarantined file |
 | `/kb eval [all \| case <id> \| task-type <type> \| collection <folder>] [judge]` | Run the benchmark suite; `judge` adds the LLM judge |
 | `/kb eval-report` | Show the most recent saved evaluation summary |
-| `/kb ticket "<task name>" [high\|medium\|low] [YYYY-MM-DD]` | Create a ticket in the Notion Tasks Tracker |
+| `/kb ticket "<task name>" [high\|medium\|low] [YYYY-MM-DD]` | Opens a form to review, assign and annotate — then creates the Notion ticket |
 
 ### Input validation worth knowing
 
@@ -78,7 +78,7 @@ The bot refuses or warns rather than returning a weak answer:
   the conversation history, re-searches the same collection, and answers with the
   thread as context. It only responds in threads it started. Multi-collection
   (`all`) threads are skipped, since there's no single collection to route to.
-  Prefix a thread reply with `ticket ...` to create a Notion ticket from the thread.
+  Prefix a thread reply with `ticket ...` to start a Notion ticket from the thread. The bot replies with an **Open ticket form** button rather than creating the task immediately, so the thread route goes through the same review step as the slash command.
 - **Auto-routing.** `/kb ask "<question>"` with no folder scores the question
   against every collection and routes to the best match above a 0.35 confidence
   threshold. If the question looks comparative or multi-hop, it silently escalates
@@ -392,6 +392,25 @@ watcher re-ingests it, re-embeds the changed chunks, and stores a version snapsh
 ```
 /kb ticket "Obtain FPRA or build DCAA-compliant indirect rate package" high 2026-11-18
 ```
+
+Running this **opens a form** rather than creating the task straight away:
+
+| Field | Behaviour |
+|---|---|
+| Task name | Prefilled from the command; editable |
+| Priority | Prefilled; High / Medium / Low |
+| Due date | Prefilled; date picker; optional |
+| Assignee | Optional. Lists real Notion users and sets the `Assignee` property. If the integration cannot list users, this becomes a free-text **Requested owner** field that is clearly *not* a Notion assignment. |
+| Additional notes | Optional multiline text, saved to the page body under an **Additional Notes** heading |
+
+**Create Ticket** writes to Notion and posts a confirmation with the task name, priority, due date,
+assignee and a working **Open in Notion** link. **Cancel** creates nothing. The confirmation only
+appears after Notion confirms creation, and a failure is reported without retrying — so a failed
+attempt never leaves a duplicate task behind.
+
+Both straight (`"`) and curly (`“ ”`) quotation marks work. If the command is malformed — an
+unterminated quote, or an argument it cannot interpret — it reports the problem instead of creating a
+ticket with a mangled title.
 
 > 🎫 Ticket Created
 > ✅ **Obtain FPRA or build DCAA-compliant indirect rate package** created
